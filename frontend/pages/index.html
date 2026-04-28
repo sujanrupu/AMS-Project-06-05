@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Submit Ticket</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-900 text-white flex items-center justify-center h-screen">
+
+<div class="bg-gray-800 p-8 rounded-2xl shadow-lg w-96">
+
+  <h1 class="text-2xl font-bold mb-6 text-center">Submit Issue</h1>
+
+  <input id="name" placeholder="Name"
+    class="w-full mb-3 p-2 rounded bg-gray-700">
+
+  <input id="email" placeholder="Email"
+    class="w-full mb-3 p-2 rounded bg-gray-700">
+
+  <input id="summary" placeholder="Summary"
+    class="w-full mb-3 p-2 rounded bg-gray-700">
+
+  <textarea id="description" placeholder="Description"
+    class="w-full mb-4 p-2 rounded bg-gray-700"></textarea>
+
+  <button id="submitBtn" onclick="submitTicket()"
+    class="w-full bg-blue-600 hover:bg-blue-700 p-2 rounded flex justify-center items-center gap-2">
+
+    <span id="btnText">Submit</span>
+
+    <svg id="loader" class="hidden animate-spin h-5 w-5 text-white"
+      xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+    </svg>
+
+  </button>
+
+  <!-- OPTIONAL RESULT BOX (important if JS uses it) -->
+  <div id="resultBox" class="mt-4 text-sm text-green-400"></div>
+
+  <a href="tickets.html" target="_blank"
+     class="block text-center mt-4 text-blue-400">
+    View Tickets →
+  </a>
+
+</div>
+
+<script src="../js/api.js"></script>
+<script src="../js/submit.js"></script>
+
+</body>
+</html>

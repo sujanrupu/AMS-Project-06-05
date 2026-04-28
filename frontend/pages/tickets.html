@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tickets Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-900 text-white min-h-screen">
+
+  <!-- HEADER -->
+  <div class="max-w-5xl mx-auto p-6">
+    <h1 class="text-3xl font-bold mb-2">Tickets Dashboard</h1>
+    <p class="text-gray-400 mb-6">All submitted incidents and issues</p>
+
+    <!-- LOADING / EMPTY STATE CONTAINER -->
+    <div id="ticketList" class="space-y-4"></div>
+
+    <!-- BACK BUTTON -->
+    <a href="index.html"
+       class="inline-block mt-8 text-blue-400 hover:text-blue-300 transition">
+      ← Back to Submit
+    </a>
+  </div>
+
+  <script src="../js/api.js"></script>
+  <script src="../js/tickets.js"></script>
+
+</body>
+</html>
