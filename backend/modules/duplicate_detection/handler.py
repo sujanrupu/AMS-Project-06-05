@@ -17,56 +17,84 @@ from repositories.ticket_repository import (
 # ───────────── MAIN FLOW ONLY ─────────────
 async def handle_duplicate_flow(state):
 
+    data = state.get("data")
     summary = state.get("summary", "")
 
-    if not summary:
-        return {"type": "error", "message": "Summary required"}
+    if not data or not summary:
+        return {
+            "type": "error",
+            "message": "Invalid request payload"
+        }
 
-    tickets = await get_all_tickets()
-    score, parent = await find_best_match(summary, tickets or [])
+    # 🔹 STEP 1: GET ALL TICKETS
+    tickets = await get_all_tickets() or []
 
-    # ───────────── DUPLICATE ─────────────
+    # 🔹 STEP 2: FILTER ONLY OPEN TICKETS
+    open_tickets = [
+        t for t in tickets
+        if t.get("status") == "Open"
+    ]
+
+    # 🔹 STEP 3: RUN SIMILARITY ONLY ON OPEN TICKETS
+    score, parent = await find_best_match(summary, open_tickets)
+
+    # ───────────── DUPLICATE FLOW ─────────────
     if parent and score >= SIMILARITY_THRESHOLD:
 
-        parent_key = parent.get("issue_key")
+        # 🔥 ALWAYS RESOLVE ROOT PARENT
+        parent_key = parent.get("parent_ticket_key") or parent.get("issue_key")
 
+        # 🔥 generate next child under ROOT parent
         child_id = await generate_child_id(parent_key)
 
         await append_duplicate(parent_key, child_id, summary)
 
         await insert_ticket({
             "issue_key": child_id,
+            "name": data.name,
+            "email": data.email,
             "summary": summary,
-            "status": "Duplicate",
-            "is_duplicate": True,
+            "description": data.description,
+
+            # ✅ FIXED (CRITICAL)
+            "status": "Open",          # 🔥 SAME as parent
+            "is_duplicate": True,      # 🔥 mark duplicate properly
+
             "parent_ticket_key": parent_key
         })
 
         return {
-            "type": "duplicate",
-            "id": child_id,
-            "score": score
+            "type": "success",
+            "message": "Duplicate ticket linked successfully",
+            "id": child_id
         }
 
-    # ───────────── UNIQUE ─────────────
+    # ───────────── NEW TICKET FLOW ─────────────
     related = await generate_related(summary)
-
-    data = state.get("data")
 
     new_ticket = await create_ticket(data, related)
 
     issue_key = new_ticket.get("issueKey")
 
+    if not issue_key:
+        return {
+            "type": "error",
+            "message": "Failed to create Jira ticket"
+        }
+
     await insert_ticket({
         "issue_key": issue_key,
+        "name": data.name,
+        "email": data.email,
         "summary": summary,
+        "description": data.description,
         "status": "Open",
         "is_duplicate": False,
         "parent_ticket_key": None
     })
 
     return {
-        "type": "new",
-        "id": issue_key,
-        "score": score
+        "type": "success",
+        "message": "Ticket registered successfully",
+        "id": issue_key
     }

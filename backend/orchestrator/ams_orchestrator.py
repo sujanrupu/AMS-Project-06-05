@@ -4,6 +4,7 @@ Simple + scalable orchestrator (NO LangGraph)
 Design:
 - Each module modifies state safely
 - Orchestrator ensures state integrity
+- Frontend receives only clean output
 """
 
 from modules.duplicate_detection.handler import handle_duplicate_flow
@@ -21,7 +22,6 @@ async def handle_ticket(data):
         "summary": getattr(data, "summary", "") if data else "",
         "type": None,
         "id": None,
-        "score": None,
         "message": None
     }
 
@@ -77,6 +77,5 @@ def normalize_response(state: dict):
     return {
         "type": state.get("type", "error"),
         "id": state.get("id"),
-        "score": state.get("score"),
         "message": state.get("message")
     }

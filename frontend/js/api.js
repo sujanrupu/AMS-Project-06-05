@@ -1,12 +1,16 @@
 const BASE_URL = "http://127.0.0.1:8000/api";
 
 async function apiRequest(endpoint, method = "GET", body = null) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
   try {
     const options = {
       method,
       headers: {
         "Content-Type": "application/json"
-      }
+      },
+      signal: controller.signal
     };
 
     // attach body only for non-GET requests
@@ -16,33 +20,50 @@ async function apiRequest(endpoint, method = "GET", body = null) {
 
     const res = await fetch(`${BASE_URL}${endpoint}`, options);
 
-    // safer content-type handling
+    clearTimeout(timeout);
+
     const contentType = res.headers.get("content-type") || "";
 
     let data;
+
     if (contentType.includes("application/json")) {
       data = await res.json();
     } else {
       data = await res.text();
     }
 
-    // unified error handling
+    // 🔥 Handle HTTP errors cleanly
     if (!res.ok) {
-      throw new Error(
-        typeof data === "string"
-          ? data
-          : JSON.stringify(data)
-      );
+      let message = "Request failed";
+
+      if (typeof data === "string") {
+        message = data;
+      } else if (data?.message) {
+        message = data.message;
+      } else if (data?.detail) {
+        message = data.detail;
+      }
+
+      throw new Error(message);
     }
 
     return data;
 
   } catch (error) {
-    console.error("❌ API Request Failed:", error.message);
+    clearTimeout(timeout);
+
+    // 🔥 Better error messages
+    let message = error.message;
+
+    if (error.name === "AbortError") {
+      message = "Request timed out";
+    }
+
+    console.error("❌ API Request Failed:", message);
 
     return {
       error: true,
-      message: error.message
+      message
     };
   }
 }

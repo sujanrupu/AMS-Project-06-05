@@ -4,7 +4,7 @@ async function submitTicket() {
   const text = document.getElementById("btnText");
   const resultBox = document.getElementById("resultBox");
 
-  // safety check (prevents runtime crashes)
+  // safety check
   if (!btn || !loader || !text) {
     console.error("❌ Missing required DOM elements");
     return;
@@ -38,12 +38,13 @@ async function submitTicket() {
 
     console.log("Ticket Response:", res);
 
-    // success UI
+    // ✅ SUCCESS UI (UPDATED)
     if (resultBox) {
       resultBox.innerHTML = `
-        <p><b>Type:</b> ${res.type}</p>
-        <p><b>ID:</b> ${res.id || "-"}</p>
-        <p><b>Score:</b> ${res.score ?? "-"}</p>
+        <p class="text-green-400 font-semibold">
+          Ticket registered successfully 🎉
+        </p>
+        <p><b>Ticket ID:</b> ${res.id || "-"}</p>
       `;
     }
 
@@ -63,7 +64,7 @@ async function submitTicket() {
     }
 
   } finally {
-    // 🔥 GUARANTEED STOP (fixes infinite loader)
+    // always stop loader
     loader.classList.add("hidden");
     text.textContent = "Submit";
     btn.disabled = false;

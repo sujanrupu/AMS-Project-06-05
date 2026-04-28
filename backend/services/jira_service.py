@@ -96,7 +96,7 @@ async def append_duplicate(parent_key, child_id, summary):
         return False
 
 
-# ───────────── CHILD ID GENERATION ─────────────
+# ───────────── CHILD ID GENERATION (FIXED + SAFE) ─────────────
 async def generate_child_id(parent_key: str):
     tickets = await get_all_tickets()
 
@@ -107,9 +107,15 @@ async def generate_child_id(parent_key: str):
     for t in tickets:
         issue_key = t.get("issue_key", "")
 
+        # 🔥 SAFETY: ignore nested bad data like ABC-1.1.1
+        if issue_key.count(".") > 1:
+            continue
+
         match = pattern.match(issue_key)
         if match:
-            max_num = max(max_num, int(match.group(1)))
+            num = int(match.group(1))
+            if num > max_num:
+                max_num = num
 
     return f"{parent_key}.{max_num + 1}"
 
@@ -131,3 +137,54 @@ async def delete_jira_ticket(issueKey: str):
     except Exception as e:
         print("❌ delete_jira_ticket exception:", str(e))
         return False
+    
+
+# ───────────── UPDATE STATUS IN JIRA ─────────────
+async def update_jira_status(issue_key: str):
+
+    url = f"{BASE_URL}/rest/api/3/issue/{issue_key}/transitions"
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            res = await client.get(url, headers=headers, auth=auth)
+
+        if res.status_code != 200:
+            print("❌ Failed to fetch transitions:", res.text)
+            return False
+
+        transitions = res.json().get("transitions", [])
+
+        transition_id = None
+
+        for t in transitions:
+            name = t.get("name", "").lower()
+
+            if any(k in name for k in ["done", "complete", "resolve", "close"]):
+                transition_id = t.get("id")
+                break
+
+        if not transition_id:
+            print("❌ No suitable transition found")
+            return False
+
+        payload = {
+            "transition": {
+                "id": transition_id
+            }
+        }
+
+        async with httpx.AsyncClient(timeout=10) as client:
+            res = await client.post(url, json=payload, headers=headers, auth=auth)
+
+        if res.status_code not in [200, 204]:
+            print("❌ Jira status update failed:", res.text)
+            return False
+
+        return True
+
+    except Exception as e:
+        print("❌ update_jira_status exception:", str(e))
+        return False
+    
+    
+
