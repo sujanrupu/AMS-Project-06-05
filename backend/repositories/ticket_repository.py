@@ -1,10 +1,11 @@
 from supabase import create_client
 from core.config import Config
 
+# Supabase client initialization
 supabase = create_client(Config.SUPABASE_URL, Config.SUPABASE_KEY)
 
 
-# ───────────── INSERT ─────────────
+# Insert new ticket into DB
 async def insert_ticket(data):
     try:
         res = supabase.table("tickets").insert(data).execute()
@@ -20,7 +21,7 @@ async def insert_ticket(data):
         return None
 
 
-# ───────────── GET ALL ─────────────
+# Fetch all tickets from DB
 async def get_all_tickets():
     try:
         res = supabase.table("tickets").select("*").execute()
@@ -31,7 +32,7 @@ async def get_all_tickets():
         return []
 
 
-# ───────────── DELETE SINGLE ─────────────
+# Delete a single ticket by issue_key
 async def delete_ticket(issue_key):
     try:
         res = supabase.table("tickets") \
@@ -46,7 +47,7 @@ async def delete_ticket(issue_key):
         return False
 
 
-# ───────────── CASCADE DELETE ─────────────
+# Delete parent + child tickets together
 async def delete_ticket_cascade(parent_key: str):
     try:
         res = supabase.table("tickets") \
@@ -61,17 +62,18 @@ async def delete_ticket_cascade(parent_key: str):
         return False
 
 
-# ───────────── UPDATE STATUS CASCADE (FINAL + CORRECT) ─────────────
+# Update status for parent + children in one query
 async def update_status_cascade(parent_key: str, status: str):
     """
-    Updates parent + all children in ONE query (atomic)
+    Single-query cascade update for parent + child tickets
     """
+
     try:
         parent_key = parent_key.strip()
 
         print("🔍 Updating status for:", parent_key)
 
-        # 🔥 SINGLE QUERY (THIS FIXES YOUR ISSUE)
+        # Update both parent and children in one DB call
         res = supabase.table("tickets") \
             .update({"status": status}) \
             .or_(f"issue_key.eq.{parent_key},parent_ticket_key.eq.{parent_key}") \
@@ -80,7 +82,7 @@ async def update_status_cascade(parent_key: str, status: str):
         print("✅ Updated rows:", res.data)
 
         if not res.data:
-            print("❌ No rows updated → parent_key mismatch")
+            print("❌ No rows updated → check parent_key mismatch")
             return False
 
         print(f"✅ Status updated successfully for {parent_key}")

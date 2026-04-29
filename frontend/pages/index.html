@@ -8,28 +8,28 @@
 
 <body class="bg-gray-900 text-white flex items-center justify-center h-screen">
 
-<div class="bg-gray-800 p-8 rounded-2xl shadow-lg w-96">
+<div class="bg-gray-800 p-10 rounded-2xl shadow-lg w-96">
 
-  <h1 class="text-2xl font-bold mb-6 text-center">Submit Issue</h1>
+  <h1 class="text-3xl font-bold mb-8 text-center text-yellow-400">Submit Issue</h1>
 
   <input id="name" placeholder="Name"
-    class="w-full mb-3 p-2 rounded bg-gray-700">
+    class="w-full mb-4 p-3 rounded bg-gray-700 text-white placeholder-gray-400 text-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent">
 
   <input id="email" placeholder="Email"
-    class="w-full mb-3 p-2 rounded bg-gray-700">
+    class="w-full mb-4 p-3 rounded bg-gray-700 text-white placeholder-gray-400 text-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent">
 
   <input id="summary" placeholder="Summary"
-    class="w-full mb-3 p-2 rounded bg-gray-700">
+    class="w-full mb-4 p-3 rounded bg-gray-700 text-white placeholder-gray-400 text-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent">
 
   <textarea id="description" placeholder="Description"
-    class="w-full mb-4 p-2 rounded bg-gray-700"></textarea>
+    class="w-full mb-6 p-3 rounded bg-gray-700 text-white placeholder-gray-400 text-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"></textarea>
 
   <button id="submitBtn" onclick="submitTicket()"
-    class="w-full bg-blue-600 hover:bg-blue-700 p-2 rounded flex justify-center items-center gap-2">
+    class="w-full bg-yellow-500 hover:bg-yellow-600 p-3 rounded flex justify-center items-center gap-2 text-gray-900 text-lg">
 
     <span id="btnText">Submit</span>
 
-    <svg id="loader" class="hidden animate-spin h-5 w-5 text-white"
+    <svg id="loader" class="hidden animate-spin h-6 w-6 text-white"
       xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
@@ -38,10 +38,10 @@
   </button>
 
   <!-- OPTIONAL RESULT BOX (important if JS uses it) -->
-  <div id="resultBox" class="mt-4 text-sm text-green-400"></div>
+  <div id="resultBox" class="mt-6 text-sm text-green-400"></div>
 
   <a href="tickets.html" target="_blank"
-     class="block text-center mt-4 text-blue-400">
+     class="block text-center mt-6 text-yellow-400 hover:text-yellow-300 text-lg">
     View Tickets →
   </a>
 

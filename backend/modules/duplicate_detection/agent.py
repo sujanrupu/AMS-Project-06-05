@@ -3,7 +3,7 @@ from services.llm_service import call_llm
 from .prompt import DUPLICATE_PROMPT, RELATED_PROMPT
 
 
-# ───────────── CLEAN LLM SCORE PARSER ─────────────
+# Extract and normalize numeric score (0–100) from LLM response
 def parse_score(text: str) -> int:
     if not text:
         return 0
@@ -18,7 +18,7 @@ def parse_score(text: str) -> int:
     return max(0, min(score, 100))
 
 
-# ───────────── SIMILARITY CHECK ─────────────
+# Call LLM to compute similarity between two summaries
 async def get_similarity(new: str, existing: str) -> int:
     prompt = DUPLICATE_PROMPT.format(new=new, existing=existing)
 
@@ -29,7 +29,7 @@ async def get_similarity(new: str, existing: str) -> int:
         return 0
 
 
-# ───────────── BEST MATCH FINDER ─────────────
+# Find best matching ticket based on highest similarity score
 async def find_best_match(summary, tickets):
     best_score = 0
     best_ticket = None
@@ -42,19 +42,19 @@ async def find_best_match(summary, tickets):
 
         score = await get_similarity(summary, existing_summary)
 
-        # 🔥 IMPORTANT FILTER (prevents false duplicates)
+        # Accept only strong matches above threshold
         if score >= best_score and score >= 60:
             best_score = score
             best_ticket = t
 
-    # final safety check
+    # Return no match if below threshold
     if best_score < 60:
         return 0, None
 
     return best_score, best_ticket
 
 
-# ───────────── RELATED ISSUES ─────────────
+# Generate related issue suggestions using LLM
 async def generate_related(summary: str):
     prompt = RELATED_PROMPT.format(summary=summary)
 

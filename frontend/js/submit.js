@@ -4,7 +4,7 @@ async function submitTicket() {
   const text = document.getElementById("btnText");
   const resultBox = document.getElementById("resultBox");
 
-  // safety check
+  // Safety check for missing DOM elements
   if (!btn || !loader || !text) {
     console.error("❌ Missing required DOM elements");
     return;
@@ -15,6 +15,7 @@ async function submitTicket() {
   btn.disabled = true;
 
   try {
+    // Collect form data
     const data = {
       name: document.getElementById("name")?.value || "",
       email: document.getElementById("email")?.value || "",
@@ -22,15 +23,16 @@ async function submitTicket() {
       description: document.getElementById("description")?.value || ""
     };
 
+    // Make API request to submit ticket
     const res = await apiRequest("/submit", "POST", data);
 
-    // backend error handling
+    // Backend error handling
     if (!res || res.error || res.type === "error") {
       console.error("Backend Error:", res?.message);
 
       if (resultBox) {
         resultBox.innerHTML = `
-          <p class="text-red-400">${res?.message || "Unknown error"}</p>
+          <p class="text-red-400 font-semibold">${res?.message || "Unknown error"}</p>
         `;
       }
       return;
@@ -38,7 +40,7 @@ async function submitTicket() {
 
     console.log("Ticket Response:", res);
 
-    // ✅ SUCCESS UI (UPDATED)
+    // SUCCESS UI (Updated with yellow highlights)
     if (resultBox) {
       resultBox.innerHTML = `
         <p class="text-green-400 font-semibold">
@@ -48,7 +50,7 @@ async function submitTicket() {
       `;
     }
 
-    // clear form safely
+    // Clear form fields safely
     ["name", "email", "summary", "description"].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = "";
@@ -59,12 +61,12 @@ async function submitTicket() {
 
     if (resultBox) {
       resultBox.innerHTML = `
-        <p class="text-red-400">Unexpected error occurred</p>
+        <p class="text-red-400 font-semibold">Unexpected error occurred</p>
       `;
     }
 
   } finally {
-    // always stop loader
+    // Always stop loader and reset button text
     loader.classList.add("hidden");
     text.textContent = "Submit";
     btn.disabled = false;

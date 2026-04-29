@@ -1,22 +1,13 @@
-"""
-Simple + scalable orchestrator (NO LangGraph)
-
-Design:
-- Each module modifies state safely
-- Orchestrator ensures state integrity
-- Frontend receives only clean output
-"""
-
 from modules.duplicate_detection.handler import handle_duplicate_flow
 
 
-# ───────────── MAIN ORCHESTRATOR ─────────────
+# Main orchestrator entry point for ticket processing
 async def handle_ticket(data):
     """
-    Entry point for ticket processing pipeline
+    Executes full ticket pipeline step-by-step
     """
 
-    # ───────────── INITIAL STATE ─────────────
+    # Initial pipeline state
     state = {
         "data": data,
         "summary": getattr(data, "summary", "") if data else "",
@@ -26,10 +17,10 @@ async def handle_ticket(data):
     }
 
     try:
-        # ───────────── STEP 1: DUPLICATE CHECK ─────────────
+        # Step 1: Duplicate detection module
         state = await safe_run_module(handle_duplicate_flow, state)
 
-        # ───────────── FUTURE MODULES ─────────────
+        # Future enhancements (priority, RCA, etc.)
         # state = await safe_run_module(handle_priority_flow, state)
         # state = await safe_run_module(handle_rca_flow, state)
 
@@ -42,10 +33,10 @@ async def handle_ticket(data):
         }
 
 
-# ───────────── SAFE MODULE WRAPPER ─────────────
+# Safe wrapper to isolate module failures
 async def safe_run_module(module_fn, state: dict):
     """
-    Prevents one module from breaking entire pipeline
+    Runs a module safely without breaking pipeline
     """
 
     try:
@@ -68,10 +59,10 @@ async def safe_run_module(module_fn, state: dict):
         }
 
 
-# ───────────── RESPONSE NORMALIZER ─────────────
+# Normalize response for frontend consistency
 def normalize_response(state: dict):
     """
-    Ensures frontend always gets safe output
+    Ensures API response is always clean and predictable
     """
 
     return {

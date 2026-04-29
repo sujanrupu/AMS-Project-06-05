@@ -13,7 +13,7 @@ async function apiRequest(endpoint, method = "GET", body = null) {
       signal: controller.signal
     };
 
-    // attach body only for non-GET requests
+    // Attach body only for non-GET requests
     if (body && method !== "GET") {
       options.body = JSON.stringify(body);
     }
@@ -32,7 +32,7 @@ async function apiRequest(endpoint, method = "GET", body = null) {
       data = await res.text();
     }
 
-    // 🔥 Handle HTTP errors cleanly
+    // Handle HTTP errors cleanly
     if (!res.ok) {
       let message = "Request failed";
 
@@ -44,6 +44,11 @@ async function apiRequest(endpoint, method = "GET", body = null) {
         message = data.detail;
       }
 
+      // Enhanced error logging with yellow-based highlight for corporate theme
+      console.error(`❌ API Request Failed: ${message}`, {
+        style: "color: yellow; font-weight: bold"
+      });
+
       throw new Error(message);
     }
 
@@ -52,14 +57,16 @@ async function apiRequest(endpoint, method = "GET", body = null) {
   } catch (error) {
     clearTimeout(timeout);
 
-    // 🔥 Better error messages
+    // Better error handling and logging
     let message = error.message;
 
     if (error.name === "AbortError") {
       message = "Request timed out";
     }
 
-    console.error("❌ API Request Failed:", message);
+    console.error(`❌ API Request Error: ${message}`, {
+      style: "color: yellow; font-weight: bold"
+    });
 
     return {
       error: true,
