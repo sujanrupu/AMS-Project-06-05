@@ -8,9 +8,12 @@ from services.jira_service import (
     append_duplicate
 )
 
+from services.embedding_service import get_embedding  # ✅ NEW
+
 from repositories.ticket_repository import (
     get_all_tickets,
-    insert_ticket
+    insert_ticket,
+    search_similar_tickets   # ✅ NEW
 )
 
 
@@ -27,40 +30,59 @@ async def handle_duplicate_flow(state):
             "message": "Invalid request payload"
         }
 
-    # Fetch all tickets from DB
-    tickets = await get_all_tickets() or []
+    # ─────────────────────────────────────────────
+    # 🔥 STEP 1: VECTOR SEARCH (NEW)
+    # ─────────────────────────────────────────────
+    candidate_tickets = []
 
-    # Filter only open tickets for duplicate check
-    open_tickets = [
-        t for t in tickets
-        if t.get("status") == "Open"
-    ]
+    query_embedding = await get_embedding(summary)
 
-    # Run similarity check only on open tickets
-    score, parent = await find_best_match(summary, open_tickets)
+    if query_embedding:
+        # ensure correct format
+        query_embedding = [float(x) for x in query_embedding]
 
-    # Duplicate ticket flow
+        candidate_tickets = await search_similar_tickets(
+            query_embedding,
+            top_k=5
+        )
+
+    # ─────────────────────────────────────────────
+    # ⚠️ FALLBACK (IMPORTANT)
+    # ─────────────────────────────────────────────
+    if not candidate_tickets:
+        tickets = await get_all_tickets() or []
+
+        candidate_tickets = [
+            t for t in tickets
+            if t.get("status") == "Open"
+        ]
+
+    # ─────────────────────────────────────────────
+    # 🔍 STEP 2: LLM SIMILARITY (UNCHANGED)
+    # ─────────────────────────────────────────────
+    score, parent = await find_best_match(summary, candidate_tickets)
+
+    # ─────────────────────────────────────────────
+    # DUPLICATE FLOW
+    # ─────────────────────────────────────────────
     if parent and score >= SIMILARITY_THRESHOLD:
 
-        # Resolve root parent ticket
         parent_key = parent.get("parent_ticket_key") or parent.get("issue_key")
 
-        # Generate child ticket ID under root parent
         child_id = await generate_child_id(parent_key)
 
-        # Log duplicate relationship in Jira
         await append_duplicate(parent_key, child_id, summary)
 
-        # Store duplicate ticket in DB
         await insert_ticket({
             "issue_key": child_id,
             "name": data.name,
             "email": data.email,
             "summary": summary,
             "description": data.description,
-            "status": "Open",          # keep same lifecycle state
-            "is_duplicate": True,      # mark as duplicate
-            "parent_ticket_key": parent_key
+            "status": "Open",
+            "is_duplicate": True,
+            "parent_ticket_key": parent_key,
+            "embedding": None   # ❌ IMPORTANT (no embedding for duplicates)
         })
 
         return {
@@ -69,19 +91,28 @@ async def handle_duplicate_flow(state):
             "id": child_id
         }
 
-    # New ticket flow (no duplicate found)
+    # ─────────────────────────────────────────────
+    # NEW TICKET FLOW
+    # ─────────────────────────────────────────────
     related = await generate_related(summary)
 
     new_ticket = await create_ticket(data, related)
 
-    issue_key = new_ticket.get("issueKey")
+    issue_key = new_ticket.get("issueKey") if new_ticket else None
 
-    # Validate Jira ticket creation
     if not issue_key:
         return {
             "type": "error",
             "message": "Failed to create Jira ticket"
         }
+
+    # ─────────────────────────────────────────────
+    # 🔥 STEP 3: CREATE EMBEDDING FOR PARENT
+    # ─────────────────────────────────────────────
+    embedding = await get_embedding(f"{summary}\n{related}")
+
+    if embedding:
+        embedding = [float(x) for x in embedding]
 
     # Store new ticket in DB
     await insert_ticket({
@@ -92,7 +123,8 @@ async def handle_duplicate_flow(state):
         "description": data.description,
         "status": "Open",
         "is_duplicate": False,
-        "parent_ticket_key": None
+        "parent_ticket_key": None,
+        "embedding": embedding   
     })
 
     return {

@@ -5,9 +5,15 @@ from core.config import Config
 supabase = create_client(Config.SUPABASE_URL, Config.SUPABASE_KEY)
 
 
-# Insert new ticket into DB
+# ─────────────────────────────────────────────
+# INSERT TICKET
+# ─────────────────────────────────────────────
 async def insert_ticket(data):
     try:
+        # 🔥 ensure embedding is proper list of float
+        if "embedding" in data and data["embedding"] is not None:
+            data["embedding"] = [float(x) for x in data["embedding"]]
+
         res = supabase.table("tickets").insert(data).execute()
 
         if res.data:
@@ -21,7 +27,9 @@ async def insert_ticket(data):
         return None
 
 
-# Fetch all tickets from DB
+# ─────────────────────────────────────────────
+# GET ALL TICKETS
+# ─────────────────────────────────────────────
 async def get_all_tickets():
     try:
         res = supabase.table("tickets").select("*").execute()
@@ -32,7 +40,44 @@ async def get_all_tickets():
         return []
 
 
-# Delete a single ticket by issue_key
+# ─────────────────────────────────────────────
+# 🔥 VECTOR SEARCH
+# ─────────────────────────────────────────────
+async def search_similar_tickets(query_embedding, top_k=5):
+    """
+    Calls Supabase RPC function: match_tickets
+    Returns top similar parent tickets
+    """
+
+    try:
+        if not query_embedding:
+            return []
+
+        # 🔥 ensure proper format
+        query_embedding = [float(x) for x in query_embedding]
+
+        res = supabase.rpc(
+            "match_tickets",
+            {
+                "query_embedding": query_embedding,
+                "match_count": top_k
+            }
+        ).execute()
+
+        if res.data:
+            return res.data
+
+        print("⚠️ No vector matches found")
+        return []
+
+    except Exception as e:
+        print("❌ vector search error:", str(e))
+        return []
+
+
+# ─────────────────────────────────────────────
+# DELETE SINGLE TICKET
+# ─────────────────────────────────────────────
 async def delete_ticket(issue_key):
     try:
         res = supabase.table("tickets") \
@@ -40,14 +85,16 @@ async def delete_ticket(issue_key):
             .eq("issue_key", issue_key) \
             .execute()
 
-        return True if res.data is not None else False
+        return bool(res.data is not None)
 
     except Exception as e:
         print("❌ delete_ticket error:", str(e))
         return False
 
 
-# Delete parent + child tickets together
+# ─────────────────────────────────────────────
+# DELETE CASCADE (PARENT + CHILD)
+# ─────────────────────────────────────────────
 async def delete_ticket_cascade(parent_key: str):
     try:
         res = supabase.table("tickets") \
@@ -55,14 +102,16 @@ async def delete_ticket_cascade(parent_key: str):
             .or_(f"issue_key.eq.{parent_key},parent_ticket_key.eq.{parent_key}") \
             .execute()
 
-        return True if res.data is not None else False
+        return bool(res.data is not None)
 
     except Exception as e:
         print("❌ delete_ticket_cascade error:", str(e))
         return False
 
 
-# Update status for parent + children in one query
+# ─────────────────────────────────────────────
+# UPDATE STATUS CASCADE
+# ─────────────────────────────────────────────
 async def update_status_cascade(parent_key: str, status: str):
     """
     Single-query cascade update for parent + child tickets
@@ -73,7 +122,6 @@ async def update_status_cascade(parent_key: str, status: str):
 
         print("🔍 Updating status for:", parent_key)
 
-        # Update both parent and children in one DB call
         res = supabase.table("tickets") \
             .update({"status": status}) \
             .or_(f"issue_key.eq.{parent_key},parent_ticket_key.eq.{parent_key}") \

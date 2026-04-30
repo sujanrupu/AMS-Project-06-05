@@ -6,3 +6,4 @@ supabase
 groq
 pydantic
 langgraph
+sentence-transformers

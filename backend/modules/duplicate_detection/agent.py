@@ -1,9 +1,14 @@
 import re
+import asyncio
+
 from services.llm_service import call_llm
+from core.constants import SIMILARITY_THRESHOLD  
 from .prompt import DUPLICATE_PROMPT, RELATED_PROMPT
 
 
-# Extract and normalize numeric score (0–100) from LLM response
+# ─────────────────────────────────────────────
+# PARSE SCORE
+# ─────────────────────────────────────────────
 def parse_score(text: str) -> int:
     if not text:
         return 0
@@ -14,11 +19,12 @@ def parse_score(text: str) -> int:
         return 0
 
     score = int(match.group(1))
-
     return max(0, min(score, 100))
 
 
-# Call LLM to compute similarity between two summaries
+# ─────────────────────────────────────────────
+# LLM SIMILARITY
+# ─────────────────────────────────────────────
 async def get_similarity(new: str, existing: str) -> int:
     prompt = DUPLICATE_PROMPT.format(new=new, existing=existing)
 
@@ -29,32 +35,39 @@ async def get_similarity(new: str, existing: str) -> int:
         return 0
 
 
-# Find best matching ticket based on highest similarity score
+# ─────────────────────────────────────────────
+# FIND BEST MATCH (PARALLEL VERSION)
+# ─────────────────────────────────────────────
 async def find_best_match(summary, tickets):
-    best_score = 0
-    best_ticket = None
 
     if not tickets:
         return 0, None
 
-    for t in tickets:
-        existing_summary = t.get("summary", "")
+    # Run all similarity checks in parallel
+    tasks = [
+        get_similarity(summary, t.get("summary", ""))
+        for t in tickets
+    ]
 
-        score = await get_similarity(summary, existing_summary)
+    scores = await asyncio.gather(*tasks)
 
-        # Accept only strong matches above threshold
-        if score >= best_score and score >= 60:
+    best_score = 0
+    best_ticket = None
+
+    for i, score in enumerate(scores):
+        if score >= best_score and score >= SIMILARITY_THRESHOLD:
             best_score = score
-            best_ticket = t
+            best_ticket = tickets[i]
 
-    # Return no match if below threshold
-    if best_score < 60:
+    if best_score < SIMILARITY_THRESHOLD:
         return 0, None
 
     return best_score, best_ticket
 
 
-# Generate related issue suggestions using LLM
+# ─────────────────────────────────────────────
+# RELATED ISSUES
+# ─────────────────────────────────────────────
 async def generate_related(summary: str):
     prompt = RELATED_PROMPT.format(summary=summary)
 
