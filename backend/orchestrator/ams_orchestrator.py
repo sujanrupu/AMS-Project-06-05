@@ -1,28 +1,67 @@
 from modules.duplicate_detection.handler import handle_duplicate_flow
+from modules.priority_sla.handler import handle_priority_sla
+
+from repositories.ticket_repository import update_ticket_priority
 
 
-# Main orchestrator entry point for ticket processing
+# ─────────────────────────────────────────────
+# MAIN ORCHESTRATOR (PRODUCTION FIXED VERSION)
+# ─────────────────────────────────────────────
 async def handle_ticket(data):
-    """
-    Executes full ticket pipeline step-by-step
-    """
 
-    # Initial pipeline state
     state = {
         "data": data,
         "summary": getattr(data, "summary", "") if data else "",
         "type": None,
         "id": None,
-        "message": None
+        "message": None,
+
+        # default empty state
+        "priority": None,
+        "priority_label": None,
+        "sla_response_time": None,
+        "sla_resolution_time": None,
+        "is_duplicate": False
     }
 
     try:
-        # Step 1: Duplicate detection module
+
+        # ─────────────────────────────
+        # STEP 1: DUPLICATE DETECTION
+        # ─────────────────────────────
         state = await safe_run_module(handle_duplicate_flow, state)
 
-        # Future enhancements (priority, RCA, etc.)
-        # state = await safe_run_module(handle_priority_flow, state)
-        # state = await safe_run_module(handle_rca_flow, state)
+        # ensure summary safety
+        if not state.get("summary") and state.get("data"):
+            data_obj = state["data"]
+            state["summary"] = getattr(data_obj, "summary", "") if hasattr(data_obj) else ""
+
+        # ─────────────────────────────
+        # STOP IMMEDIATELY IF DUPLICATE
+        # ─────────────────────────────
+        if state.get("is_duplicate"):
+            return normalize_response(state)
+
+        # ─────────────────────────────
+        # STEP 2: PRIORITY + SLA (ONLY FOR NEW TICKETS)
+        # ─────────────────────────────
+        state = await safe_run_module(handle_priority_sla, state)
+
+        # ─────────────────────────────
+        # DATABASE UPDATE (ONLY FOR NEW TICKETS)
+        # ─────────────────────────────
+        issue_key = state.get("id")
+
+        if issue_key:
+            await update_ticket_priority(
+                issue_key=issue_key,
+                priority=state.get("priority"),
+                sla={
+                    "response_time": state.get("sla_response_time"),
+                    "resolution_time": state.get("sla_resolution_time")
+                },
+                label=state.get("priority_label")
+            )
 
         return normalize_response(state)
 
@@ -33,12 +72,10 @@ async def handle_ticket(data):
         }
 
 
-# Safe wrapper to isolate module failures
+# ─────────────────────────────────────────────
+# SAFE RUNNER
+# ─────────────────────────────────────────────
 async def safe_run_module(module_fn, state: dict):
-    """
-    Runs a module safely without breaking pipeline
-    """
-
     try:
         result = await module_fn(state)
 
@@ -49,7 +86,8 @@ async def safe_run_module(module_fn, state: dict):
                 "message": "Module returned invalid state"
             }
 
-        return result
+        state.update(result)
+        return state
 
     except Exception as e:
         return {
@@ -59,14 +97,17 @@ async def safe_run_module(module_fn, state: dict):
         }
 
 
-# Normalize response for frontend consistency
+# ─────────────────────────────────────────────
+# RESPONSE NORMALIZER
+# ─────────────────────────────────────────────
 def normalize_response(state: dict):
-    """
-    Ensures API response is always clean and predictable
-    """
-
     return {
-        "type": state.get("type", "error"),
+        "type": state.get("type", "success"),
         "id": state.get("id"),
-        "message": state.get("message")
+        "message": state.get("message"),
+
+        "priority": state.get("priority"),
+        "priority_label": state.get("priority_label"),
+        "sla_response_time": state.get("sla_response_time"),
+        "sla_resolution_time": state.get("sla_resolution_time"),
     }

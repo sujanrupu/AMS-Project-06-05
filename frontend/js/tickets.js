@@ -28,11 +28,8 @@ async function loadTickets() {
 
     tickets.forEach((t) => {
 
-      // 🔥 IMPORTANT: prevent UI reverting while updating
       const isUpdating = updatingTickets.has(t.issue_key);
-
-      const isCompleted =
-        t.status === "Completed" || isUpdating;
+      const isCompleted = t.status === "Completed" || isUpdating;
 
       const card = document.createElement("div");
       card.className = "bg-gray-800 p-6 rounded-xl mb-4 shadow-lg hover:shadow-xl transition-all ease-in-out transform hover:scale-105";
@@ -41,24 +38,44 @@ async function loadTickets() {
       card.innerHTML = `
         <div class="space-y-4">
 
-          <p class="text-lg font-semibold text-yellow-400"><b>Ticket ID:</b> ${t.issue_key || "-"}</p>
+          <p class="text-lg font-semibold text-yellow-400">
+            <b>Ticket ID:</b> ${t.issue_key || "-"}
+          </p>
 
           <div class="text-sm text-gray-300">
             <p><b>Name:</b> ${t.name || "-"}</p>
             <p><b>Email:</b> ${t.email || "-"}</p>
             <p><b>Summary:</b> ${t.summary || "-"}</p>
             <p><b>Description:</b> ${t.description || "-"}</p>
+
+            <!-- 🔥 PRIORITY -->
+            <p>
+              <b>Priority:</b>
+              <span class="text-yellow-400 font-semibold">
+                ${t.priority || "P5"} (${t.priority_label || "Planning"})
+              </span>
+            </p>
+
+            <!-- 🔥 SLA -->
+            <p>
+              <b>SLA Response:</b> ${t.sla_response_time || "-"}
+            </p>
+            <p>
+              <b>SLA Resolution:</b> ${t.sla_resolution_time || "-"}
+            </p>
           </div>
 
-          <!-- Status Section (Stay fixed when updated) -->
+          <!-- Status -->
           <div class="flex items-center space-x-2">
             <b>Status:</b>
+
             <span class="ticket-status text-green-400 font-semibold">
               ${isCompleted ? "✔ Completed" : "● Open"}
             </span>
+
             ${
               !isCompleted
-                ? ` 
+                ? `
                   <select 
                     class="bg-gray-700 text-white p-2 rounded-md focus:ring-2 focus:ring-yellow-400 transition-all hover:bg-gray-600"
                     onchange="updateStatus('${t.issue_key}', this)"
@@ -71,10 +88,9 @@ async function loadTickets() {
             }
           </div>
 
-          <!-- Action Buttons -->
+          <!-- Actions -->
           <div class="flex justify-between space-x-3 mt-4">
 
-            <!-- View Child Tickets Button -->
             <button 
               class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-md text-sm font-medium shadow-md transition-all duration-200 hover:scale-105"
               onclick="openChildTickets('${t.issue_key}')"
@@ -82,7 +98,6 @@ async function loadTickets() {
               View Child Tickets
             </button>
 
-            <!-- Delete Button -->
             <button 
               class="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-md text-sm font-medium shadow-md transition-all duration-200 hover:scale-105"
               onclick="deleteTicket('${t.issue_key}')"
@@ -91,7 +106,7 @@ async function loadTickets() {
             </button>
 
           </div>
-          
+
         </div>
       `;
 
@@ -103,26 +118,22 @@ async function loadTickets() {
   }
 }
 
-// ───────────── UPDATE STATUS (FIXED, PREVENT POSITION SHIFT) ─────────────
+
+// ───────────── UPDATE STATUS ─────────────
 async function updateStatus(issueKey, dropdown) {
   try {
     const selected = dropdown.value;
 
     if (selected !== "Completed") return;
 
-    // 🔥 Mark as updating (prevents UI revert)
     updatingTickets.add(issueKey);
-
     dropdown.disabled = true;
 
-    // 🔥 Optimistic UI update (only the status text is updated)
     const ticketCard = document.getElementById(`ticket-${issueKey}`);
     if (!ticketCard) return;
 
     const statusSpan = ticketCard.querySelector(".ticket-status");
     statusSpan.textContent = "✔ Completed";
-    statusSpan.classList.remove("text-green-400");
-    statusSpan.classList.add("text-green-400", "font-semibold");
 
     const res = await apiRequest(
       `/tickets/${issueKey}/complete`,
@@ -131,13 +142,11 @@ async function updateStatus(issueKey, dropdown) {
 
     if (res?.error) {
       console.error("❌ Status update failed:", res.message);
-
       updatingTickets.delete(issueKey);
       loadTickets();
       return;
     }
 
-    // 🔥 Small delay ensures DB sync before reload
     setTimeout(() => {
       updatingTickets.delete(issueKey);
       loadTickets();
@@ -149,6 +158,7 @@ async function updateStatus(issueKey, dropdown) {
     loadTickets();
   }
 }
+
 
 // ───────────── CHILD MODAL ─────────────
 async function openChildTickets(parentKey) {
@@ -190,7 +200,7 @@ async function openChildTickets(parentKey) {
           children.length === 0
             ? `<p class="text-gray-400">No child tickets found</p>`
             : children.map(c => `
-              <div class="bg-gray-800 p-4 rounded-lg mb-4 shadow-lg hover:shadow-xl transition-all">
+              <div class="bg-gray-800 p-4 rounded-lg mb-4 shadow-lg">
 
                 <p><b>Ticket ID:</b> ${c.issue_key}</p>
                 <p><b>Name:</b> ${c.name || "-"}</p>
@@ -199,7 +209,7 @@ async function openChildTickets(parentKey) {
                 <p><b>Description:</b> ${c.description || "-"}</p>
 
                 <p>
-                  <b>Status:</b> 
+                  <b>Status:</b>
                   ${
                     c.status === "Completed"
                       ? `<span class="text-green-400">✔ Completed</span>`
@@ -221,11 +231,13 @@ async function openChildTickets(parentKey) {
   }
 }
 
+
 // ───────────── CLOSE MODAL ─────────────
 function closeChildModal() {
   const modal = document.getElementById("childModal");
   if (modal) modal.remove();
 }
+
 
 // ───────────── DELETE ─────────────
 async function deleteTicket(id) {
@@ -245,6 +257,7 @@ async function deleteTicket(id) {
     console.error("❌ Delete error:", err);
   }
 }
+
 
 // ───────────── INIT ─────────────
 document.addEventListener("DOMContentLoaded", loadTickets);

@@ -1,0 +1,71 @@
+Ticket Table creation schema:
+-- Enable pgvector
+create extension if not exists vector;
+
+-- Create table
+create table tickets (
+  id uuid primary key default gen_random_uuid(),
+
+  issue_key text unique not null,
+  
+  name text not null,
+  email text not null,
+
+  summary text not null,
+  description text,
+
+  status text not null default 'Open'
+    check (status in ('Open', 'Completed')),
+
+  is_duplicate boolean default false,
+
+  parent_ticket_key text,
+
+  -- ───────── PRIORITY + SLA (ADDED ONLY) ─────────
+  priority text default 'P5',
+  priority_label text default 'Planning',
+  sla_response_time text,
+  sla_resolution_time text,
+
+  -- FIXED: 384 dimension for sentence-transformers
+  embedding vector(384),
+
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now()
+);
+
+
+
+
+vector_index schema:
+create index tickets_embedding_idx
+on tickets
+using ivfflat (embedding vector_cosine_ops)
+with (lists = 100);
+
+
+
+ticket_simlarity_srearch schema:
+create or replace function match_tickets(
+  query_embedding vector(384),
+  match_count int
+)
+returns table (
+  id uuid,
+  issue_key text,
+  summary text,
+  similarity float
+)
+language sql
+stable
+as $$
+  select
+    id,
+    issue_key,
+    summary,
+    1 - (embedding <=> query_embedding) as similarity
+  from tickets
+  where embedding is not null
+  order by embedding <=> query_embedding
+  limit match_count;
+$$;

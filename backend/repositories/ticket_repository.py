@@ -1,26 +1,29 @@
 from supabase import create_client
 from core.config import Config
 
-# Supabase client initialization
 supabase = create_client(Config.SUPABASE_URL, Config.SUPABASE_KEY)
 
 
 # ─────────────────────────────────────────────
-# INSERT TICKET
+# INSERT TICKET (CLEAN ARCHITECTURE)
 # ─────────────────────────────────────────────
 async def insert_ticket(data):
     try:
-        # 🔥 ensure embedding is proper list of float
-        if "embedding" in data and data["embedding"] is not None:
+        data = dict(data)
+
+        # embedding safety
+        if data.get("embedding") is not None:
             data["embedding"] = [float(x) for x in data["embedding"]]
+
+        # ONLY SAFE DEFAULTS (NO BUSINESS LOGIC HERE)
+        data.setdefault("priority", "P5")
+        data.setdefault("priority_label", "Planning")
+        data.setdefault("sla_response_time", None)
+        data.setdefault("sla_resolution_time", None)
 
         res = supabase.table("tickets").insert(data).execute()
 
-        if res.data:
-            return res.data[0]
-
-        print("❌ insert_ticket: No data returned")
-        return None
+        return res.data[0] if res.data else None
 
     except Exception as e:
         print("❌ insert_ticket error:", str(e))
@@ -33,7 +36,7 @@ async def insert_ticket(data):
 async def get_all_tickets():
     try:
         res = supabase.table("tickets").select("*").execute()
-        return res.data if res.data else []
+        return res.data or []
 
     except Exception as e:
         print("❌ get_all_tickets error:", str(e))
@@ -41,19 +44,13 @@ async def get_all_tickets():
 
 
 # ─────────────────────────────────────────────
-# 🔥 VECTOR SEARCH
+# VECTOR SEARCH
 # ─────────────────────────────────────────────
 async def search_similar_tickets(query_embedding, top_k=5):
-    """
-    Calls Supabase RPC function: match_tickets
-    Returns top similar parent tickets
-    """
-
     try:
         if not query_embedding:
             return []
 
-        # 🔥 ensure proper format
         query_embedding = [float(x) for x in query_embedding]
 
         res = supabase.rpc(
@@ -64,11 +61,7 @@ async def search_similar_tickets(query_embedding, top_k=5):
             }
         ).execute()
 
-        if res.data:
-            return res.data
-
-        print("⚠️ No vector matches found")
-        return []
+        return res.data or []
 
     except Exception as e:
         print("❌ vector search error:", str(e))
@@ -76,7 +69,7 @@ async def search_similar_tickets(query_embedding, top_k=5):
 
 
 # ─────────────────────────────────────────────
-# DELETE SINGLE TICKET
+# DELETE SINGLE
 # ─────────────────────────────────────────────
 async def delete_ticket(issue_key):
     try:
@@ -85,7 +78,7 @@ async def delete_ticket(issue_key):
             .eq("issue_key", issue_key) \
             .execute()
 
-        return bool(res.data is not None)
+        return bool(res.data)
 
     except Exception as e:
         print("❌ delete_ticket error:", str(e))
@@ -93,7 +86,7 @@ async def delete_ticket(issue_key):
 
 
 # ─────────────────────────────────────────────
-# DELETE CASCADE (PARENT + CHILD)
+# DELETE CASCADE
 # ─────────────────────────────────────────────
 async def delete_ticket_cascade(parent_key: str):
     try:
@@ -102,7 +95,7 @@ async def delete_ticket_cascade(parent_key: str):
             .or_(f"issue_key.eq.{parent_key},parent_ticket_key.eq.{parent_key}") \
             .execute()
 
-        return bool(res.data is not None)
+        return bool(res.data)
 
     except Exception as e:
         print("❌ delete_ticket_cascade error:", str(e))
@@ -113,30 +106,53 @@ async def delete_ticket_cascade(parent_key: str):
 # UPDATE STATUS CASCADE
 # ─────────────────────────────────────────────
 async def update_status_cascade(parent_key: str, status: str):
-    """
-    Single-query cascade update for parent + child tickets
-    """
-
     try:
         parent_key = parent_key.strip()
-
-        print("🔍 Updating status for:", parent_key)
 
         res = supabase.table("tickets") \
             .update({"status": status}) \
             .or_(f"issue_key.eq.{parent_key},parent_ticket_key.eq.{parent_key}") \
             .execute()
 
-        print("✅ Updated rows:", res.data)
-
-        if not res.data:
-            print("❌ No rows updated → check parent_key mismatch")
-            return False
-
-        print(f"✅ Status updated successfully for {parent_key}")
-
-        return True
+        return bool(res.data)
 
     except Exception as e:
         print("❌ update_status_cascade error:", str(e))
         return False
+
+
+# ─────────────────────────────────────────────
+# PRIORITY + SLA UPDATE (FIXED + SAFE)
+# ─────────────────────────────────────────────
+async def update_ticket_priority(issue_key: str, priority: str, sla: dict, label: str):
+    try:
+        sla = sla or {}
+
+        payload = {
+            "priority": priority,
+            "priority_label": label,
+            "sla_response_time": sla.get("response_time"),
+            "sla_resolution_time": sla.get("resolution_time")
+        }
+
+        res = supabase.table("tickets") \
+            .update(payload) \
+            .eq("issue_key", issue_key) \
+            .execute()
+
+        # ✅ correct Supabase error handling
+        if hasattr(res, "error") and res.error:
+            print("❌ update_ticket_priority failed:", res.error)
+            return False
+
+        # optional safety check
+        if not res.data:
+            print("⚠️ update_ticket_priority: no rows updated")
+            return False
+
+        return True
+
+    except Exception as e:
+        print("❌ update_ticket_priority error:", str(e))
+        return False
+
