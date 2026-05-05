@@ -47,12 +47,32 @@ async function loadTickets() {
         </div>
 
         <!-- ESCALATION LABEL (if any) -->
-        ${localStorage.getItem(`esc_${t.issue_key}`) ? `
-  <div class="escalation-label px-4 py-2 border-b border-purple/10 bg-blue-900/10 rounded-b-lg flex items-center gap-2">
-    <span class="mono text-[0.65rem] text-white/90 bg-blue-700/30 px-2 py-0.5 rounded-full">
-      🚀 Escalated to: ${localStorage.getItem(`esc_${t.issue_key}`)}
-    </span>
-  </div>` : ''}
+        ${!isCompleted ? (() => {
+  const esc = localStorage.getItem(`esc_${t.issue_key}`);
+
+  // FIRST TIME (NO ESCALATION YET)
+  if (!esc) {
+    return `
+      <div class="px-4 py-2 border-b border-purple/10 bg-surface2">
+        <span class="mono text-[0.65rem] text-yellow bg-yellow/10 px-2 py-0.5 rounded-full">
+          Status: Assigned to L1
+        </span>
+      </div>
+    `;
+  }
+
+  // ESCALATED CASE
+  const priority = (t.priority || "").toUpperCase();
+  const level = (priority === "P1" || priority === "P2") ? "L3" : "L2";
+
+  return `
+    <div class="escalation-label px-4 py-2 border-b border-purple/10 bg-blue-900/10 rounded-b-lg flex items-center gap-2">
+      <span class="mono text-[0.65rem] text-white/90 bg-blue-700/30 px-2 py-0.5 rounded-full">
+        🚀 Escalated to ${level} (${esc})
+      </span>
+    </div>
+  `;
+})() : ''}
 
         <!-- CARD BODY -->
         <div class="px-4 py-3 space-y-2 text-sm">
