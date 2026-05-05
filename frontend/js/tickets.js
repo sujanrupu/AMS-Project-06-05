@@ -1,112 +1,134 @@
-let updatingTickets = new Set(); // 🔥 Prevent flicker overwrite
+let updatingTickets = new Set();
 
+// ───────────── LOAD TICKETS ─────────────
 async function loadTickets() {
   try {
     const res = await apiRequest("/tickets");
-
     const container = document.getElementById("ticketList");
 
-    if (!container) {
-      console.error("❌ ticketList container not found");
-      return;
-    }
-
+    if (!container) return;
     container.innerHTML = "";
 
     const allTickets =
       Array.isArray(res) ? res :
-      Array.isArray(res?.tickets) ? res.tickets :
-      Array.isArray(res?.data) ? res.data :
-      [];
+        Array.isArray(res?.tickets) ? res.tickets :
+          Array.isArray(res?.data) ? res.data : [];
 
     const tickets = allTickets.filter(t => !t.parent_ticket_key);
 
     if (tickets.length === 0) {
-      container.innerHTML = `<p class="text-gray-400 text-center">No tickets found</p>`;
+      container.innerHTML = `
+        <div class="mono text-center py-16 text-muted text-sm col-span-2">
+          <div class="text-4xl mb-4">📭</div>
+          <div>No tickets found</div>
+        </div>`;
       return;
     }
 
-    tickets.forEach((t) => {
-
+    tickets.forEach((t, idx) => {
       const isUpdating = updatingTickets.has(t.issue_key);
       const isCompleted = t.status === "Completed" || isUpdating;
 
       const card = document.createElement("div");
-      card.className = "bg-gray-800 p-6 rounded-xl mb-4 shadow-lg hover:shadow-xl transition-all ease-in-out transform hover:scale-105";
+      card.className = "animate-slideUp bg-surface border border-purple/15 rounded-2xl overflow-hidden shadow-lg hover:border-purple/30 transition-all duration-200";
+      card.style.animationDelay = `${idx * 0.05}s`;
       card.id = `ticket-${t.issue_key}`;
 
       card.innerHTML = `
-        <div class="space-y-4">
+        <!-- CARD HEADER -->
+        <div class="flex items-center justify-between px-4 py-3 bg-surface2 border-b border-purple/15">
+          <span class="mono text-yellow text-sm font-bold">${t.issue_key || "-"}</span>
+          <span class="mono text-xs px-2.5 py-0.5 rounded-full border ${isCompleted
+          ? 'text-green border-green/20 bg-green/5'
+          : 'text-yellow border-yellow/20 bg-yellow/5'
+        }">
+            ${isCompleted ? "✔ Completed" : "● Open"}
+          </span>
+        </div>
 
-          <p class="text-lg font-semibold text-yellow-400">
-            <b>Ticket ID:</b> ${t.issue_key || "-"}
-          </p>
+        <!-- ESCALATION LABEL (if any) -->
+        ${localStorage.getItem(`esc_${t.issue_key}`) ? `
+  <div class="escalation-label px-4 py-2 border-b border-purple/10 bg-blue-900/10 rounded-b-lg flex items-center gap-2">
+    <span class="mono text-[0.65rem] text-white/90 bg-blue-700/30 px-2 py-0.5 rounded-full">
+      🚀 Escalated to: ${localStorage.getItem(`esc_${t.issue_key}`)}
+    </span>
+  </div>` : ''}
 
-          <div class="text-sm text-gray-300">
-            <p><b>Name:</b> ${t.name || "-"}</p>
-            <p><b>Email:</b> ${t.email || "-"}</p>
-            <p><b>Summary:</b> ${t.summary || "-"}</p>
-            <p><b>Description:</b> ${t.description || "-"}</p>
+        <!-- CARD BODY -->
+        <div class="px-4 py-3 space-y-2 text-sm">
 
-            <!-- 🔥 PRIORITY -->
-            <p>
-              <b>Priority:</b>
-              <span class="text-yellow-400 font-semibold">
-                ${t.priority || "P5"} (${t.priority_label || "Planning"})
-              </span>
-            </p>
-
-            <!-- 🔥 SLA -->
-            <p>
-              <b>SLA Response:</b> ${t.sla_response_time || "-"}
-            </p>
-            <p>
-              <b>SLA Resolution:</b> ${t.sla_resolution_time || "-"}
-            </p>
+          <!-- 1. Name + Email -->
+          <div class="grid grid-cols-2 gap-x-4 gap-y-2">
+            <div>
+              <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-0.5">Name</span>
+              <span class="text-slate-200 text-xs">${t.name || "-"}</span>
+            </div>
+            <div>
+              <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-0.5">Email</span>
+              <span class="text-slate-200 text-xs truncate block">${t.email || "-"}</span>
+            </div>
           </div>
 
-          <!-- Status -->
-          <div class="flex items-center space-x-2">
-            <b>Status:</b>
-
-            <span class="ticket-status text-green-400 font-semibold">
-              ${isCompleted ? "✔ Completed" : "● Open"}
-            </span>
-
-            ${
-              !isCompleted
-                ? `
-                  <select 
-                    class="bg-gray-700 text-white p-2 rounded-md focus:ring-2 focus:ring-yellow-400 transition-all hover:bg-gray-600"
-                    onchange="updateStatus('${t.issue_key}', this)"
-                  >
-                    <option value="Open" selected>Open</option>
-                    <option value="Completed">Completed</option>
-                  </select>
-                `
-                : ''
-            }
+          <!-- 2. Summary -->
+          <div>
+            <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-0.5">Summary</span>
+            <span class="text-slate-200 text-xs">${t.summary || "-"}</span>
           </div>
 
-          <!-- Actions -->
-          <div class="flex justify-between space-x-3 mt-4">
-
-            <button 
-              class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-md text-sm font-medium shadow-md transition-all duration-200 hover:scale-105"
-              onclick="openChildTickets('${t.issue_key}')"
-            >
-              View Child Tickets
-            </button>
-
-            <button 
-              class="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-md text-sm font-medium shadow-md transition-all duration-200 hover:scale-105"
-              onclick="deleteTicket('${t.issue_key}')"
-            >
-              Delete
-            </button>
-
+          <!-- 3. Description -->
+          <div>
+            <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-0.5">Description</span>
+            <span class="text-slate-300 text-xs leading-relaxed line-clamp-2">${t.description || "-"}</span>
           </div>
 
+          <!-- 4. Priority + SLA Response + SLA Resolution -->
+          <div class="grid grid-cols-2 gap-x-4 gap-y-2 pt-1">
+            <div>
+              <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-0.5">Priority</span>
+              <span class="mono text-yellow text-xs font-semibold">${t.priority || "P5"} <span class="text-muted font-normal">(${t.priority_label || "Planning"})</span></span>
+            </div>
+            <div>
+              <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-0.5">SLA Response</span>
+              <span class="text-slate-200 text-xs">${t.sla_response_time || "-"}</span>
+            </div>
+            <div class="col-span-2">
+              <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-0.5">SLA Resolution</span>
+              <span class="text-slate-200 text-xs">${t.sla_resolution_time || "-"}</span>
+            </div>
+          </div>
+
+          <!-- 5. Status control -->
+          ${!isCompleted ? `
+            <div class="flex items-center gap-2 pt-1">
+              <span class="mono text-[0.6rem] text-muted uppercase tracking-widest">Update Status</span>
+              <select onchange="updateStatus('${t.issue_key}', this)">
+                <option value="Open" selected>Open</option>
+                <option value="Completed">Completed</option>
+              </select>
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- CARD ACTIONS -->
+        <div class="px-4 py-3 border-t border-purple/10 flex items-center gap-2">
+          <button
+            class="flex-1 bg-purple/15 hover:bg-purple/25 border border-purple/20 text-purple text-[0.65rem] font-bold py-2 px-3 rounded-xl mono transition-all duration-200 hover:scale-[1.02]"
+            onclick="window.open('runbooks.html?id=${t.issue_key}', '_blank')"
+          >
+            ⚙ Runbook
+          </button>
+          <button
+            class="flex-1 bg-surface2 hover:bg-white/5 border border-purple/15 text-slate-300 text-[0.65rem] font-bold py-2 px-3 rounded-xl mono transition-all duration-200 hover:scale-[1.02]"
+            onclick="openChildTickets('${t.issue_key}')"
+          >
+            👥 Child Tickets
+          </button>
+          <button
+            class="bg-red/10 hover:bg-red/20 border border-red/20 text-red text-[0.65rem] font-bold py-2 px-3 rounded-xl mono transition-all duration-200 hover:scale-[1.02]"
+            onclick="deleteTicket('${t.issue_key}')"
+          >
+            🗑
+          </button>
         </div>
       `;
 
@@ -118,33 +140,32 @@ async function loadTickets() {
   }
 }
 
-
 // ───────────── UPDATE STATUS ─────────────
 async function updateStatus(issueKey, dropdown) {
   try {
     const selected = dropdown.value;
-
     if (selected !== "Completed") return;
 
     updatingTickets.add(issueKey);
     dropdown.disabled = true;
 
-    const ticketCard = document.getElementById(`ticket-${issueKey}`);
-    if (!ticketCard) return;
-
-    const statusSpan = ticketCard.querySelector(".ticket-status");
-    statusSpan.textContent = "✔ Completed";
-
-    const res = await apiRequest(
-      `/tickets/${issueKey}/complete`,
-      "PUT"
-    );
+    const res = await apiRequest(`/tickets/${issueKey}/complete`, "PUT");
 
     if (res?.error) {
       console.error("❌ Status update failed:", res.message);
       updatingTickets.delete(issueKey);
       loadTickets();
       return;
+    }
+
+    // ✅ REMOVE FROM localStorage
+    localStorage.removeItem(`esc_${issueKey}`);
+
+    // ✅ Remove label instantly
+    const card = document.getElementById(`ticket-${issueKey}`);
+    if (card) {
+      const old = card.querySelector(".escalation-label");
+      if (old) old.remove();
     }
 
     setTimeout(() => {
@@ -167,59 +188,74 @@ async function openChildTickets(parentKey) {
 
     const allTickets =
       Array.isArray(res) ? res :
-      Array.isArray(res?.tickets) ? res.tickets :
-      Array.isArray(res?.data) ? res.data :
-      [];
+        Array.isArray(res?.tickets) ? res.tickets :
+          Array.isArray(res?.data) ? res.data : [];
 
-    const children = allTickets.filter(
-      t => t.parent_ticket_key === parentKey
-    );
+    const children = allTickets.filter(t => t.parent_ticket_key === parentKey);
 
     const old = document.getElementById("childModal");
     if (old) old.remove();
 
     const modal = document.createElement("div");
     modal.id = "childModal";
-    modal.className = "fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center";
+    modal.className = "fixed inset-0 bg-black/70 modal-backdrop flex items-center justify-center z-50";
+    modal.onclick = (e) => { if (e.target === modal) closeChildModal(); };
 
     modal.innerHTML = `
-      <div class="bg-gray-900 text-white p-6 rounded-xl w-[600px] max-h-[80vh] overflow-auto relative shadow-xl">
+      <div class="bg-surface border border-purple/15 rounded-2xl w-[620px] max-h-[80vh] overflow-auto relative shadow-2xl animate-slideUp">
 
-        <button 
-          class="absolute top-3 right-3 text-white text-xl"
-          onclick="closeChildModal()"
-        >
-          ✖
-        </button>
+        <!-- MODAL HEADER -->
+        <div class="flex items-center justify-between px-6 py-4 bg-surface2 border-b border-purple/15 sticky top-0">
+          <div>
+            <h2 class="font-bold text-purple">Child Tickets</h2>
+            <p class="mono text-muted text-xs mt-0.5">Parent: ${parentKey}</p>
+          </div>
+          <button
+            class="mono text-muted hover:text-slate-200 text-lg transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5"
+            onclick="closeChildModal()"
+          >✕</button>
+        </div>
 
-        <h2 class="text-xl font-bold mb-4 text-yellow-400">
-          Child Tickets of ${parentKey}
-        </h2>
-
-        ${
-          children.length === 0
-            ? `<p class="text-gray-400">No child tickets found</p>`
-            : children.map(c => `
-              <div class="bg-gray-800 p-4 rounded-lg mb-4 shadow-lg">
-
-                <p><b>Ticket ID:</b> ${c.issue_key}</p>
-                <p><b>Name:</b> ${c.name || "-"}</p>
-                <p><b>Email:</b> ${c.email || "-"}</p>
-                <p><b>Summary:</b> ${c.summary || "-"}</p>
-                <p><b>Description:</b> ${c.description || "-"}</p>
-
-                <p>
-                  <b>Status:</b>
-                  ${
-                    c.status === "Completed"
-                      ? `<span class="text-green-400">✔ Completed</span>`
-                      : `<span class="text-yellow-400">● Open</span>`
-                  }
-                </p>
-
-              </div>
-            `).join("")
-        }
+        <!-- MODAL BODY -->
+        <div class="p-6 space-y-4">
+          ${children.length === 0
+        ? `<div class="mono text-center py-8 text-muted text-sm">
+                   <div class="text-3xl mb-3">📭</div>
+                   <div>No child tickets found</div>
+                 </div>`
+        : children.map(c => `
+                <div class="bg-surface2 border border-purple/10 rounded-xl p-4 space-y-2">
+                  <div class="flex items-center justify-between">
+                    <span class="mono text-yellow text-xs font-bold">${c.issue_key}</span>
+                    <span class="mono text-xs px-2.5 py-0.5 rounded-full border ${c.status === "Completed"
+            ? 'text-green border-green/20 bg-green/5'
+            : 'text-yellow border-yellow/20 bg-yellow/5'
+          }">
+                      ${c.status === "Completed" ? "✔ Completed" : "● Open"}
+                    </span>
+                  </div>
+                  <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+                    <div>
+                      <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block">Name</span>
+                      <span>${c.name || "-"}</span>
+                    </div>
+                    <div>
+                      <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block">Email</span>
+                      <span>${c.email || "-"}</span>
+                    </div>
+                    <div class="col-span-2">
+                      <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block">Summary</span>
+                      <span>${c.summary || "-"}</span>
+                    </div>
+                    <div class="col-span-2">
+                      <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block">Description</span>
+                      <span class="text-slate-300 leading-relaxed">${c.description || "-"}</span>
+                    </div>
+                  </div>
+                </div>
+              `).join("")
+      }
+        </div>
 
       </div>
     `;
@@ -231,33 +267,23 @@ async function openChildTickets(parentKey) {
   }
 }
 
-
 // ───────────── CLOSE MODAL ─────────────
 function closeChildModal() {
   const modal = document.getElementById("childModal");
   if (modal) modal.remove();
 }
 
-
 // ───────────── DELETE ─────────────
 async function deleteTicket(id) {
   try {
     if (!id) return;
-
     const res = await apiRequest(`/tickets/${id}`, "DELETE");
-
-    if (res?.error) {
-      console.error("❌ Delete failed:", res.message);
-      return;
-    }
-
+    if (res?.error) { console.error("❌ Delete failed:", res.message); return; }
     loadTickets();
-
   } catch (err) {
     console.error("❌ Delete error:", err);
   }
 }
-
 
 // ───────────── INIT ─────────────
 document.addEventListener("DOMContentLoaded", loadTickets);

@@ -4,51 +4,91 @@
   <meta charset="UTF-8">
   <title>Submit Ticket</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { syne: ['Syne','sans-serif'], mono: ['JetBrains Mono','monospace'] },
+          colors: {
+            bg:'#0f0f14', surface:'#16161f', surface2:'#1e1e2e',
+            purple:'#a855f7', purpled:'#7c3aed', yellow:'#facc15',
+            green:'#4ade80', red:'#f87171', muted:'#64748b',
+          },
+          animation: { pulse2:'pulse2 1.2s infinite', slideUp:'slideUp 0.4s ease both' },
+          keyframes: {
+            pulse2:  { '0%,100%':{opacity:'1'}, '50%':{opacity:'0.4'} },
+            slideUp: { from:{opacity:'0',transform:'translateY(16px)'}, to:{opacity:'1',transform:'translateY(0)'} },
+          },
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="../css/theme.css">
 </head>
 
-<body class="bg-gray-900 text-white flex items-center justify-center h-screen">
+<body class="bg-bg text-slate-200 min-h-screen flex items-center justify-center overflow-x-hidden px-4">
 
-<div class="bg-gray-800 p-10 rounded-2xl shadow-lg w-96">
+<div class="relative z-10 w-full max-w-md animate-slideUp">
 
-  <h1 class="text-3xl font-bold mb-8 text-center text-yellow-400">Submit Issue</h1>
+  <!-- HEADER -->
+  <div class="text-center mb-8">
+    <h1 class="text-3xl font-extrabold text-purple tracking-tight">⚡ Submit Issue</h1>
+    <p class="mono text-muted text-xs mt-2">Report an incident or request</p>
+  </div>
 
-  <input id="name" placeholder="Name"
-    class="w-full mb-4 p-3 rounded bg-gray-700 text-white placeholder-gray-400 text-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent">
+  <!-- FORM CARD -->
+  <div class="bg-surface border border-purple/15 rounded-2xl p-8 shadow-2xl">
+    <div class="space-y-4">
 
-  <input id="email" placeholder="Email"
-    class="w-full mb-4 p-3 rounded bg-gray-700 text-white placeholder-gray-400 text-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent">
+      <div>
+        <label class="mono text-xs text-muted mb-1.5 block tracking-widest uppercase">Name</label>
+        <input id="name" placeholder="Your full name" />
+      </div>
 
-  <input id="summary" placeholder="Summary"
-    class="w-full mb-4 p-3 rounded bg-gray-700 text-white placeholder-gray-400 text-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent">
+      <div>
+        <label class="mono text-xs text-muted mb-1.5 block tracking-widest uppercase">Email</label>
+        <input id="email" type="email" placeholder="you@company.com" />
+      </div>
 
-  <textarea id="description" placeholder="Description"
-    class="w-full mb-6 p-3 rounded bg-gray-700 text-white placeholder-gray-400 text-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"></textarea>
+      <div>
+        <label class="mono text-xs text-muted mb-1.5 block tracking-widest uppercase">Summary</label>
+        <input id="summary" placeholder="Brief description of the issue" />
+      </div>
 
-  <button id="submitBtn" onclick="submitTicket()"
-    class="w-full bg-yellow-500 hover:bg-yellow-600 p-3 rounded flex justify-center items-center gap-2 text-gray-900 text-lg">
+      <div>
+        <label class="mono text-xs text-muted mb-1.5 block tracking-widest uppercase">Description</label>
+        <textarea id="description" rows="4" placeholder="Detailed description of the issue..."></textarea>
+      </div>
 
-    <span id="btnText">Submit</span>
+    </div>
 
-    <svg id="loader" class="hidden animate-spin h-6 w-6 text-white"
-      xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
-    </svg>
+    <!-- SUBMIT BUTTON -->
+    <button id="submitBtn" onclick="submitTicket()"
+      class="mt-6 w-full bg-purple hover:bg-purpled text-white font-bold py-3 px-6 rounded-xl flex justify-center items-center gap-2 transition-all duration-200 hover:scale-[1.02] hover:shadow-lg hover:shadow-purple/20">
+      <span id="btnText">Submit Ticket</span>
+      <svg id="loader" class="hidden animate-spin h-5 w-5 text-white"
+        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+      </svg>
+    </button>
 
-  </button>
+    <!-- RESULT BOX -->
+    <div id="resultBox" class="mono mt-4 text-sm text-center min-h-[1.5rem]"></div>
+  </div>
 
-  <!-- OPTIONAL RESULT BOX (important if JS uses it) -->
-  <div id="resultBox" class="mt-6 text-sm text-green-400"></div>
-
-  <a href="tickets.html" target="_blank"
-     class="block text-center mt-6 text-yellow-400 hover:text-yellow-300 text-lg">
-    View Tickets →
-  </a>
+  <!-- FOOTER LINK -->
+  <div class="text-center mt-6">
+    <a href="tickets.html" target="_blank"
+       class="mono text-xs text-muted hover:text-purple transition-colors">
+      View All Tickets →
+    </a>
+  </div>
 
 </div>
 
 <script src="../js/api.js"></script>
 <script src="../js/submit.js"></script>
-
 </body>
 </html>

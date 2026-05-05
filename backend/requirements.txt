@@ -10,3 +10,4 @@ sentence-transformers
 langchain
 langchain-core
 langchain-groq
+torch

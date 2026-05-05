@@ -185,6 +185,3 @@ async def update_jira_status(issue_key: str):
     except Exception as e:
         print("❌ update_jira_status exception:", str(e))
         return False
-    
-    
-

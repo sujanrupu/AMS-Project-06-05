@@ -1,3 +1,5 @@
+# modules/duplicate_detection/handler.py
+
 from core.constants import SIMILARITY_THRESHOLD
 from modules.duplicate_detection.agent import find_best_match
 from modules.duplicate_detection.service import generate_related
@@ -22,7 +24,7 @@ from repositories.ticket_repository import (
 # ─────────────────────────────────────────────
 async def handle_duplicate_flow(state):
 
-    data = state.get("data") or {}
+    data    = state.get("data") or {}
     summary = state.get("summary", "")
 
     # ─────────────────────────────────────────────
@@ -31,17 +33,17 @@ async def handle_duplicate_flow(state):
     if not data or not summary:
         return {
             **state,
-            "type": "error",
+            "type":    "error",
             "message": "Invalid request payload"
         }
 
-    # safe extraction
-    name = getattr(data, "name", None) or data.get("name", "")
-    email = getattr(data, "email", None) or data.get("email", "")
+    # safe extraction — supports both object and dict
+    name        = getattr(data, "name",        None) or data.get("name",        "")
+    email       = getattr(data, "email",       None) or data.get("email",       "")
     description = getattr(data, "description", None) or data.get("description", "")
 
     # ─────────────────────────────────────────────
-    # VECTOR SEARCH (ONLY OPEN TICKETS)
+    # STEP 1 — VECTOR SEARCH (OPEN TICKETS ONLY)
     # ─────────────────────────────────────────────
     candidate_tickets = []
 
@@ -55,13 +57,14 @@ async def handle_duplicate_flow(state):
             top_k=5
         )
 
+        # Only consider open tickets for duplicate detection
         candidate_tickets = [
             t for t in candidate_tickets
             if t.get("status") == "Open"
         ]
 
     # ─────────────────────────────────────────────
-    # FALLBACK (OPEN ONLY)
+    # FALLBACK — ALL OPEN TICKETS IF VECTOR EMPTY
     # ─────────────────────────────────────────────
     if not candidate_tickets:
         tickets = await get_all_tickets() or []
@@ -72,12 +75,12 @@ async def handle_duplicate_flow(state):
         ]
 
     # ─────────────────────────────────────────────
-    # SIMILARITY CHECK
+    # STEP 2 — LLM SIMILARITY CHECK
     # ─────────────────────────────────────────────
     score, parent = await find_best_match(summary, candidate_tickets)
 
     # ─────────────────────────────────────────────
-    # DUPLICATE FLOW (CRITICAL FIX)
+    # DUPLICATE FLOW
     # ─────────────────────────────────────────────
     if parent and score >= SIMILARITY_THRESHOLD:
 
@@ -88,31 +91,31 @@ async def handle_duplicate_flow(state):
         await append_duplicate(parent_key, child_id, summary)
 
         await insert_ticket({
-            "issue_key": child_id,
-            "name": name,
-            "email": email,
-            "summary": summary,
-            "description": description,
-
-            "status": "Open",
-            "is_duplicate": True,
+            "issue_key":         child_id,
+            "name":              name,
+            "email":             email,
+            "summary":           summary,
+            "description":       description,
+            "status":            "Open",
+            "is_duplicate":      True,
             "parent_ticket_key": parent_key,
 
-            # 🔥 FORCE NULLS (NO SLA / PRIORITY INHERITANCE)
-            "priority": None,
-            "priority_label": None,
-            "sla_response_time": None,
-            "sla_resolution_time": None,
+            # No SLA / priority inheritance for duplicates
+            "priority":              None,
+            "priority_label":        None,
+            "sla_response_time":     None,
+            "sla_resolution_time":   None,
 
+            # No embedding for duplicates
             "embedding": None
         })
 
-        # ✅ CRITICAL FIX: propagate duplicate state properly
+        # Propagate duplicate state through pipeline
         return {
             **state,
-            "type": "success",
-            "message": "Duplicate ticket linked successfully",
-            "id": child_id,
+            "type":         "success",
+            "message":      "Duplicate ticket linked successfully",
+            "id":           child_id,
             "is_duplicate": True
         }
 
@@ -128,12 +131,12 @@ async def handle_duplicate_flow(state):
     if not issue_key:
         return {
             **state,
-            "type": "error",
+            "type":    "error",
             "message": "Failed to create Jira ticket"
         }
 
     # ─────────────────────────────────────────────
-    # EMBEDDING GENERATION
+    # STEP 3 — GENERATE EMBEDDING FOR PARENT
     # ─────────────────────────────────────────────
     embedding = await get_embedding(f"{summary}\n{related}")
 
@@ -141,26 +144,24 @@ async def handle_duplicate_flow(state):
         embedding = [float(x) for x in embedding]
 
     # ─────────────────────────────────────────────
-    # STORE IN DB
+    # STORE IN SUPABASE
     # ─────────────────────────────────────────────
     await insert_ticket({
-        "issue_key": issue_key,
-        "name": name,
-        "email": email,
-        "summary": summary,
-        "description": description,
-
-        "status": "Open",
-        "is_duplicate": False,
+        "issue_key":         issue_key,
+        "name":              name,
+        "email":             email,
+        "summary":           summary,
+        "description":       description,
+        "status":            "Open",
+        "is_duplicate":      False,
         "parent_ticket_key": None,
-
-        "embedding": embedding
+        "embedding":         embedding
     })
 
     return {
         **state,
-        "type": "success",
-        "message": "Ticket registered successfully",
-        "id": issue_key,
+        "type":         "success",
+        "message":      "Ticket registered successfully",
+        "id":           issue_key,
         "is_duplicate": False
     }

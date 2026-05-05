@@ -43,6 +43,7 @@ async def find_best_match(summary, tickets):
     if not tickets:
         return 0, None
 
+    # Run all similarity checks in parallel
     tasks = [
         get_similarity(summary, t.get("summary", ""))
         for t in tickets
