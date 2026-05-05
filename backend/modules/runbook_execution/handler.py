@@ -20,8 +20,7 @@ async def handle_runbook_flow(state: dict) -> dict:
                 **state,
                 "type":    "error",
                 "message": "Runbook module: ticket summary is empty",
-            }
-        
+            }        
         if not description:
             return {
                 **state,
