@@ -1,0 +1,120 @@
+/* ============================================================
+   theme.css — exact styles from the original source files
+   ============================================================ */
+
+/* ===== BASE ===== */
+body {
+  font-family: 'Outfit', sans-serif;
+  background: #0f0f14;
+  color: #e2e8f0;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ===== GRID BACKGROUND ===== */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(168,85,247,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(168,85,247,.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* ===== TOP-RIGHT RADIAL GLOW ===== */
+body::after {
+  content: '';
+  position: fixed;
+  top: -120px;
+  right: -120px;
+  width: 400px;
+  height: 400px;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(circle, rgba(168,85,247,.12) 0%, transparent 70%);
+}
+
+/* ===== MONO UTILITY ===== */
+.mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ===== ANIMATIONS ===== */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse2 {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+.animate-slideUp { animation: slideUp 0.4s ease both; }
+.animate-pulse2  { animation: pulse2 1.2s infinite; }
+
+/* ===== SCROLLBAR (tickets + runbook pages) ===== */
+::-webkit-scrollbar       { width: 6px; }
+::-webkit-scrollbar-track { background: #0f0f14; }
+::-webkit-scrollbar-thumb { background: rgba(168,85,247,0.3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(168,85,247,0.5); }
+
+/* ===== SELECT (tickets page) ===== */
+select {
+  background: #1e1e2e;
+  border: 1px solid rgba(168,85,247,0.2);
+  color: #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+select:focus { border-color: rgba(168,85,247,0.5); }
+
+/* ===== FORM INPUTS (submit page) ===== */
+input, textarea {
+  background: #1e1e2e;
+  border: 1px solid rgba(168,85,247,0.15);
+  color: #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 0.6rem 0.875rem;
+  width: 100%;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.9rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+input::placeholder, textarea::placeholder { color: #64748b; }
+input:focus, textarea:focus {
+  border-color: rgba(168,85,247,0.5);
+  box-shadow: 0 0 0 3px rgba(168,85,247,0.08);
+}
+textarea { resize: none; }
+
+/* ===== SHIMMER (runbook skeleton) ===== */
+.shimmer {
+  background: linear-gradient(90deg, #1e1e2e 25%, rgba(255,255,255,.04) 50%, #1e1e2e 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* ===== RUNBOOK: checked checklist item ===== */
+.checked-item                    { background: rgba(74,222,128,.05); border-color: rgba(74,222,128,.2); }
+.checked-item .chk-box           { background: #4ade80; border-color: #4ade80; }
+.checked-item .chk-box::after    { content: '✓'; color: #000; font-size: 11px; font-weight: 900; }
+.checked-item .chk-label         { color: #64748b; text-decoration: line-through; }
+
+/* ===== RUNBOOK: collapsible chevron ===== */
+.chevron.open { transform: rotate(180deg); }
+
+/* ===== RUNBOOK: command code block ===== */
+.cmd-code { white-space: pre-wrap; word-break: break-all; }

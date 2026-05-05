@@ -1,0 +1,267 @@
+runbook table:
+
+-- Enable pgvector
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE IF NOT EXISTS runbooks (
+    id BIGSERIAL PRIMARY KEY,
+
+    title TEXT NOT NULL,
+    category TEXT NOT NULL,
+    severity TEXT NOT NULL CHECK (severity IN ('P1', 'P2', 'P3', 'P4')),
+
+    keywords TEXT NOT NULL,
+    symptoms TEXT NOT NULL,
+    resolution_steps TEXT NOT NULL,
+
+    escalation_team TEXT NOT NULL,
+    owner TEXT,
+    estimated_resolution_time TEXT,
+    ci_asset TEXT,
+
+    status TEXT DEFAULT 'Active'
+        CHECK (status IN ('Active', 'Draft', 'Deprecated')),
+
+    -- ✅ NEW: semantic embedding
+    embedding VECTOR(384),
+
+    last_reviewed_at TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT NOW(),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+
+vector index:
+
+CREATE INDEX idx_runbooks_embedding
+ON runbooks
+USING ivfflat (embedding vector_cosine_ops)
+WITH (lists = 100);
+
+
+inserting runbooks:
+
+-- =========================================
+-- ALL RUNBOOKS INSERT SCRIPT
+-- =========================================
+
+-- RUNBOOK 1: DATABASE CONNECTION FAILURE
+INSERT INTO runbooks (
+    title, category, severity, keywords, symptoms,
+    resolution_steps, escalation_team, owner,
+    estimated_resolution_time, ci_asset
+) VALUES (
+    'Database Connection Failure',
+    'Database',
+    'P1',
+    'database, connection timeout, postgres, mysql, db down, cannot connect',
+    'Application throwing DB timeout errors, connection refused, login failures, service unavailable',
+    '1. Check database service status
+2. Verify DB process is running
+3. Test local DB connectivity
+4. Test remote DB connectivity from app server
+5. Review DB logs for authentication or crash errors
+6. Check max_connections limit
+7. Verify connection pool settings
+8. Restart database service if required
+9. Validate application reconnects successfully
+10. Monitor alerts after recovery',
+    'DBA Team',
+    'DBA Lead',
+    '45 minutes',
+    'PostgreSQL DB - PROD-DB-01'
+);
+
+-- RUNBOOK 2: HIGH CPU USAGE
+INSERT INTO runbooks (
+    title, category, severity, keywords, symptoms,
+    resolution_steps, escalation_team, owner,
+    estimated_resolution_time, ci_asset
+) VALUES (
+    'High CPU Usage',
+    'Performance',
+    'P2',
+    'cpu high, performance issue, server slow, high load, application timeout',
+    'CPU above 90%, request timeout, slow response, system lag, high load average',
+    '1. Check top CPU consuming processes
+2. Identify suspicious PID
+3. Review logs for repeated failures
+4. Check for recent deployments
+5. Verify cron jobs/background jobs
+6. Kill stuck process if safe
+7. Restart affected service
+8. Scale horizontally if required
+9. Rollback recent deployment if needed
+10. Monitor CPU normalization',
+    'SRE Team',
+    'SRE Lead',
+    '20 minutes',
+    'App Server - APP-01'
+);
+
+-- RUNBOOK 3: DISK SPACE FULL
+INSERT INTO runbooks (
+    title, category, severity, keywords, symptoms,
+    resolution_steps, escalation_team, owner,
+    estimated_resolution_time, ci_asset
+) VALUES (
+    'Disk Space Full',
+    'Storage',
+    'P1',
+    'disk full, storage full, no space left, write failed, disk 100%',
+    'No space left on device, write failures, logs not generating, service crash due to storage exhaustion',
+    '1. Run df -h to identify full partition
+2. Check largest directories using du
+3. Identify oversized log files
+4. Delete old rotated logs
+5. Clear temp files and package cache
+6. Remove old backups
+7. Check Docker unused images
+8. Truncate emergency logs if critical
+9. Restart impacted application
+10. Configure log rotation for prevention',
+    'Infra Team',
+    'Infra Lead',
+    '30 minutes',
+    'File Server - FS-01'
+);
+
+-- RUNBOOK 4: APPLICATION DEPLOYMENT FAILURE
+INSERT INTO runbooks (
+    title, category, severity, keywords, symptoms,
+    resolution_steps, escalation_team, owner,
+    estimated_resolution_time, ci_asset
+) VALUES (
+    'Application Deployment Failure',
+    'Deployment',
+    'P2',
+    'deployment failed, release failed, build failed, ci cd failure, pipeline issue',
+    'Deployment stuck, pod crash, rollout failed, image pull error, health check failure',
+    '1. Check CI/CD pipeline logs
+2. Verify Docker image exists
+3. Validate environment variables
+4. Check secrets and configmaps
+5. Verify database migrations
+6. Review application startup logs
+7. Check health endpoint
+8. Verify ingress and service mapping
+9. Rollback deployment if critical
+10. Run smoke test after recovery',
+    'DevOps Team',
+    'DevOps Lead',
+    '60 minutes',
+    'Kubernetes Cluster - K8S-PROD'
+);
+
+-- RUNBOOK 5: MEMORY LEAK ISSUE
+INSERT INTO runbooks (
+    title, category, severity, keywords, symptoms,
+    resolution_steps, escalation_team, owner,
+    estimated_resolution_time, ci_asset
+) VALUES (
+    'Memory Leak Issue',
+    'Performance',
+    'P1',
+    'memory leak, high memory, OOM, RAM full, memory exhausted',
+    'Memory usage continuously increasing, OOM kills, pod restarts, application crash',
+    '1. Check current memory usage
+2. Identify top memory consuming process
+3. Verify OOM killer logs
+4. Monitor memory growth pattern
+5. Check connection/file descriptor leaks
+6. Review cache growth
+7. Analyze recent code changes
+8. Restart service as temporary fix
+9. Apply memory limits if containerized
+10. Perform root cause analysis using profiler',
+    'Platform Engineering Team',
+    'Platform Lead',
+    '45 minutes',
+    'Application Pod - ECOM-APP'
+);
+
+-- RUNBOOK 6: API SERVICE DOWN
+INSERT INTO runbooks (
+    title, category, severity, keywords, symptoms,
+    resolution_steps, escalation_team, owner,
+    estimated_resolution_time, ci_asset
+) VALUES (
+    'API Service Down',
+    'Application',
+    'P1',
+    'api down, service unavailable, 500 error, endpoint failure, backend not responding',
+    'Users receiving 500/503 errors, API timeout, failed requests, service health check failing',
+    '1. Check application service status
+2. Verify API process is running
+3. Review recent deployments
+4. Check application logs for exceptions
+5. Validate database and cache connectivity
+6. Verify environment variables and secrets
+7. Restart API service if required
+8. Check load balancer and ingress routing
+9. Validate health endpoint response
+10. Monitor recovery after restart',
+    'Application Support Team',
+    'Application Lead',
+    '30 minutes',
+    'API Server - API-PROD-01'
+);
+
+-- RUNBOOK 7: WIFI CONNECTIVITY ISSUE
+INSERT INTO runbooks (
+    title, category, severity, keywords, symptoms,
+    resolution_steps, escalation_team, owner,
+    estimated_resolution_time, ci_asset
+) VALUES (
+    'WiFi Connectivity Issue',
+    'Network',
+    'P2',
+    'wifi issue, internet not working, network disconnected, wireless issue, no internet access',
+    'Users unable to connect to WiFi, frequent disconnections, slow internet, authentication failures, no internet access',
+    '1. Verify WiFi router/access point status
+2. Check if issue affects single or multiple users
+3. Restart router or access point
+4. Verify SSID visibility and signal strength
+5. Check DHCP IP allocation
+6. Validate DNS and gateway connectivity
+7. Reconnect affected devices
+8. Verify authentication credentials
+9. Escalate to network team if hardware issue found
+10. Monitor connection stability after fix',
+    'Network Support Team',
+    'Network Lead',
+    '20 minutes',
+    'Office WiFi Network - WIFI-01'
+);
+
+
+runbook_similarity_search:
+
+CREATE OR REPLACE FUNCTION match_runbooks(
+    query_embedding VECTOR(384),
+    match_count     INT
+)
+RETURNS TABLE (
+    id                      BIGINT,
+    title                   TEXT, 
+    category                TEXT,
+    severity                TEXT,
+    symptoms                TEXT,
+    resolution_steps        TEXT,
+    escalation_team         TEXT,
+    estimated_resolution_time TEXT,
+    similarity              FLOAT
+)
+LANGUAGE sql STABLE
+AS $$
+    SELECT
+        id, title, category, severity, symptoms,
+        resolution_steps, escalation_team,
+        estimated_resolution_time,
+        1 - (embedding <=> query_embedding) AS similarity
+    FROM runbooks
+    WHERE status = 'Active'
+      AND embedding IS NOT NULL
+    ORDER BY embedding <=> query_embedding
+    LIMIT match_count;
+$$;

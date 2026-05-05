@@ -1,0 +1,81 @@
+Ticket Table creation schema:
+
+-- Enable pgvector
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- Create tickets table
+CREATE TABLE IF NOT EXISTS tickets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  issue_key TEXT UNIQUE NOT NULL,
+
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+
+  summary TEXT NOT NULL,
+  description TEXT,
+
+  status TEXT NOT NULL DEFAULT 'Open'
+    CHECK (status IN ('Open', 'Completed')),
+
+  is_duplicate BOOLEAN DEFAULT FALSE,
+  parent_ticket_key TEXT,
+
+  -- sentence-transformers embedding
+  embedding VECTOR(384),
+
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+  -- checklist + execution
+  checklist_steps JSONB,
+  commands JSONB,
+
+  -- priority + SLA
+  priority TEXT DEFAULT 'P5',
+  priority_label TEXT DEFAULT 'Planning',
+  sla_response_time TEXT,
+  sla_resolution_time TEXT,
+
+  -- runbook mapping
+  runbook_title TEXT,
+  runbook_category TEXT,
+  runbook_escalation_team TEXT,
+  match_type TEXT
+);
+
+
+vector_index schema:
+
+create index tickets_embedding_idx
+on tickets
+using ivfflat (embedding vector_cosine_ops)
+with (lists = 100);
+
+
+
+ticket_simlarity_srearch schema:
+
+create or replace function match_tickets(
+  query_embedding vector(384),
+  match_count int
+)
+returns table (
+  id uuid,
+  issue_key text,
+  summary text,
+  similarity float
+)
+language sql
+stable
+as $$
+  select
+    id,
+    issue_key,
+    summary,
+    1 - (embedding <=> query_embedding) as similarity
+  from tickets
+  where embedding is not null
+  order by embedding <=> query_embedding
+  limit match_count;
+$$;
