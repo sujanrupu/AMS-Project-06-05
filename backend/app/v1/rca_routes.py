@@ -7,6 +7,7 @@ from repositories.ticket_repository import (
     update_ticket_rca,
 )
 from services.embedding_service import get_embedding
+from modules.copilot_rca.agent import is_same_issue
 from modules.copilot_rca.handler import handle_rca_flow
 from modules.copilot_rca.service import get_confidence_label, get_rca_summary
 
@@ -77,10 +78,20 @@ async def get_rca(issueKey: str):
                 print(f"[RCA] Top match: '{top.get('issue_key')}' similarity={similarity:.3f} threshold={RCA_SIMILARITY_THRESHOLD}")
 
                 if similarity >= RCA_SIMILARITY_THRESHOLD:
-                    best = top
-                    print(f"✅ [{issueKey}] Above threshold — copying RCA from '{top.get('issue_key')}' (0 LLM calls)")
+                    print(f"🔍 [{issueKey}] Above threshold — asking LLM: is this the same issue?")
+                    current = {"summary": summary, "description": description}
+                    same, confidence = is_same_issue(current, top)
+
+                    if same:
+                        best = top
+                        best["match_confidence"] = confidence
+                        print(f"✅ [{issueKey}] LLM CALL 1 — confirmed same issue — copying RCA from '{top.get('issue_key')}' (no generation needed)")
+                    else:
+                        print(f"⚠️  [{issueKey}] LLM CALL 1 — confirmed DIFFERENT issue — falling through to fresh generation")
                 else:
-                    print(f"⚠️  [{issueKey}] Below threshold ({similarity:.3f}) — generating fresh RCA")
+                    print(f"🚫 [{issueKey}] Below threshold ({similarity:.3f} < {RCA_SIMILARITY_THRESHOLD}) — skipping LLM match check — going straight to fresh generation")
+            else:
+                print(f"📭 [{issueKey}] No completed parent tickets found in vector search — going straight to fresh generation")
 
         # ── 7A. High similarity match — copy RCA directly, no LLM ──
         if best:
@@ -113,7 +124,7 @@ async def get_rca(issueKey: str):
             }
 
         # ── 7B. Below threshold or no matches — generate fresh RCA via LLM ──
-        print(f"🤖 [{issueKey}] Calling LLM for fresh RCA...")
+        print(f"🤖 [{issueKey}] LLM CALL — generating fresh RCA (source: {'different issue' if candidates else 'no past tickets found'})")
         state = {
             "id":      issueKey,
             "summary": summary,

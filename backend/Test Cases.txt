@@ -1,0 +1,77 @@
+Database Connection Failure
+
+Ticket 1 — Fresh RCA (no past tickets)
+Summary: PostgreSQL database connection timeout on production server
+Description: The production application is throwing continuous database connection timeout errors. Multiple services are reporting connection refused when attempting to connect to PROD-DB-01. Error logs show max_connections limit has been reached with all slots occupied. Application has been returning 503 errors to end users for the past 30 minutes. Connection pool is exhausted and no new connections are being accepted.
+Ticket 2 — Above 0.60, same issue → LLM confirms → copy RCA
+Summary: Database connection refused — all connection slots occupied on production DB
+Description: Backend services cannot connect to the PostgreSQL database. All connection slots are occupied and new connection attempts are being rejected. The pg_stat_activity table shows hundreds of idle connections not being released. Application is returning errors to all users. The database process is running but rejecting all incoming connections due to max_connections being reached on PROD-DB-01.
+Ticket 3 — Below 0.60, different issue → fresh generation
+Summary: Slow database queries causing report generation timeout
+Description: The reporting module is timing out when generating monthly analytics reports. Individual SELECT queries on the reports table are taking over 5 minutes due to missing indexes on date range columns. The database is fully accessible and accepting connections normally. No connection errors are occurring. This is purely a query performance and indexing issue affecting only the reporting service.
+
+High CPU Usage
+Ticket 1 — Fresh RCA
+Summary: CPU usage above 95% on APP-01 causing request timeouts
+Description: Application server APP-01 is experiencing sustained CPU usage above 95% for the last hour. Users are reporting slow response times and frequent request timeouts. Top command shows a Java process consuming 87% CPU. Load average has spiked to 24.5 on a 4-core machine. A deployment was pushed 2 hours ago which may have introduced an inefficient processing loop causing the CPU spike.
+Ticket 2 — Above 0.60, same issue → LLM confirms → copy RCA
+Summary: Server CPU maxed out — Java process consuming all resources causing timeouts
+Description: Production server APP-01 CPU is pegged at 100% causing all application requests to timeout. A runaway Java process is consuming all available CPU cores. Load average is critically high at 22.8 making the system unresponsive. Response times have degraded from milliseconds to over 30 seconds. The issue started after yesterday's deployment and is suspected to be a processing loop introduced in the new release.
+Ticket 3 — Below 0.60, different issue → fresh generation
+Summary: Network bandwidth saturation causing packet loss between services
+Description: Microservices are experiencing intermittent communication failures due to network bandwidth saturation on the internal network segment. Packet loss of 15% is being observed between the application and database servers. CPU and memory on all servers are completely normal. The issue is in the network layer not the application. A large data migration job running in parallel is consuming all available network bandwidth causing service degradation.
+
+Disk Space Full
+Ticket 1 — Fresh RCA
+Summary: Disk at 100% on FS-01 — write failures across all services
+Description: File server FS-01 has hit 100% disk utilization on the /var partition. Application logs are no longer being written and the logging service has crashed. Multiple services writing to /var/log are failing silently. Old rotated log files from the past 6 months are consuming 180GB. Docker images are also taking significant space with no cleanup done in 3 months. Services are completely unable to write any data to disk.
+Ticket 2 — Above 0.60, same issue → LLM confirms → copy RCA
+Summary: No space left on device — /var partition full causing service failures
+Description: FS-01 server /var partition has reached 100% capacity and all services are failing with no space left on device errors. Log files have not been rotated properly and are consuming most of the disk. Old Docker images that were never pruned are taking additional space. Application logging has completely stopped. Services cannot write runtime data and are crashing due to the complete storage exhaustion on the server.
+Ticket 3 — Below 0.60, different issue → fresh generation
+Summary: Elasticsearch index size growing uncontrollably causing cluster instability
+Description: The Elasticsearch cluster is becoming unstable because log indices are growing without any index lifecycle management policy configured. The cluster has 2TB of storage but indices are consuming 1.9TB with no automatic rollover or deletion happening. Shard allocation is failing on new indices. This is an Elasticsearch index management and ILM configuration issue not a local server disk space problem. Application servers themselves have plenty of disk space.
+
+Application Deployment Failure
+Ticket 1 — Fresh RCA
+Summary: Kubernetes deployment failed — pods stuck in CrashLoopBackOff
+Description: The latest production deployment to K8S-PROD has failed. Pods are stuck in CrashLoopBackOff after the new image was deployed. Logs show the application cannot start due to missing required environment variable DATABASE_URL. The ConfigMap was not updated as part of the release. Previous version has been taken down and the service is completely unavailable. Health check is failing at startup preventing successful rollout.
+Ticket 2 — Above 0.60, same issue → LLM confirms → copy RCA
+Summary: Pod CrashLoopBackOff after deployment — application failing to start
+Description: Production Kubernetes deployment on K8S-PROD has all pods in CrashLoopBackOff state. The container starts but immediately crashes because the REDIS_URL environment variable is missing from the deployment ConfigMap. The Docker image pulled successfully but the application cannot initialize without the required configuration. Service is completely down. The missing environment variable was introduced in this release but not added to the cluster configuration.
+Ticket 3 — Below 0.60, different issue → fresh generation
+Summary: Ansible playbook failing during server provisioning — SSH key authentication error
+Description: The infrastructure provisioning Ansible playbook is failing at the server configuration stage due to SSH key authentication errors. The new servers were provisioned without adding the deployment user's public key to authorized_keys. This is an infrastructure provisioning and access configuration issue completely unrelated to application Kubernetes deployments. No application pods or containers are involved. The servers themselves are unreachable via SSH.
+
+Memory Leak Issue
+Ticket 1 — Fresh RCA
+Summary: Application memory continuously increasing — OOM kills on ECOM-APP pod
+Description: The e-commerce application pod ECOM-APP is experiencing a continuous memory leak. Memory starts at 512MB after restart and grows by 50MB per hour without releasing. After 12 hours the pod hits the 1GB memory limit and gets OOM killed by Kubernetes. A new caching layer introduced last sprint is suspected of not evicting entries correctly. The OOM kill cycle repeats every 12 hours impacting production stability.
+Ticket 2 — Above 0.60, same issue → LLM confirms → copy RCA
+Summary: Memory growing without release — pod OOM killed repeatedly every few hours
+Description: ECOM-APP Kubernetes pod memory usage grows continuously from 500MB after each restart hitting the 1GB memory limit every 8-10 hours triggering OOM kills. Garbage collection is not releasing memory between requests. A cache component introduced in the recent sprint accumulates entries without eviction causing the steady growth. Pod restarts provide only temporary relief before the memory leak cycle begins again immediately after startup.
+Ticket 3 — Below 0.60, different issue → fresh generation
+Summary: PostgreSQL shared_buffers misconfiguration causing excessive RAM consumption on DB server
+Description: The PostgreSQL database server is consuming 90% of system RAM due to shared_buffers being set to 80% of total memory in postgresql.conf which is far above the recommended 25%. This is not an application memory leak but a database server misconfiguration. The OS is swapping heavily causing database query performance to degrade. The application pods are healthy and memory usage is normal. Only the database host is affected by the RAM exhaustion.
+
+API Service Down
+Ticket 1 — Fresh RCA
+Summary: API service returning 503 — all endpoints down on API-PROD-01
+Description: The production API service on API-PROD-01 is returning 503 Service Unavailable to all clients. The application process stopped responding to health check pings. Error logs show the service ran out of worker threads due to slow database queries blocking the thread pool. Users cannot complete any transactions. Load balancer has marked all backend instances as unhealthy. No config changes were made recently.
+Ticket 2 — Above 0.60, same issue → LLM confirms → copy RCA
+Summary: Backend API completely down — 503 on all endpoints including health check
+Description: API-PROD-01 is returning 503 on every endpoint including the health check. All worker threads are exhausted because long-running database queries are holding threads for extended periods blocking new requests from being processed. The load balancer health check is failing for all registered backend instances. Users have no access to any API functionality. Thread pool exhaustion from slow DB queries is the suspected root cause.
+Ticket 3 — Below 0.60, different issue → fresh generation
+Summary: API gateway SSL certificate expired causing HTTPS connection failures
+Description: All HTTPS connections to the API gateway are failing with SSL handshake errors because the TLS certificate expired yesterday. HTTP connections on port 80 are working but are being rejected by clients enforcing HTTPS. The API service and backend application are completely healthy and running normally. This is purely a certificate management and renewal failure. No application code or database issues are involved.
+
+WiFi Connectivity Issue (Above Threshold but NOT same issue)
+Ticket 1 — Fresh RCA
+Summary: Office WiFi completely down — all users unable to connect to WIFI-01
+Description: The entire office WiFi network WIFI-01 is down after a power fluctuation this morning. The router access point is powered on but not broadcasting the SSID. All employees across all floors are affected and cannot connect wirelessly. DHCP server is unreachable and no IP addresses are being assigned to devices. Network team has been informed. Staff have switched to mobile hotspots as a temporary workaround pending resolution.
+Ticket 2 — Above 0.60, same issue → LLM says FALSE → fresh generation
+Summary: WiFi network not available — access point not broadcasting SSID
+Description: The office WiFi WIFI-01 is completely unavailable. The access point hardware is powered on but not broadcasting the wireless network. No devices across any floor of the building can detect or connect to the corporate WiFi. DHCP is not responding and devices are getting APIPA addresses. All employees are affected. The outage appears to have started after maintenance work was done on the network rack last evening disconnecting the access point briefly.
+Ticket 3 — Below 0.60, different issue → fresh generation
+Summary: DNS resolution failing for internal services on corporate network
+Description: Employees connected to the office WiFi can browse the internet normally but cannot access internal services like the HR portal, ticketing system, or internal wikis. The issue is DNS resolution — internal hostnames are not resolving while external DNS works fine. The internal DNS server appears to be down or unreachable. WiFi connectivity itself is completely working. IP connectivity to the internal network exists but the DNS server at 10.0.0.53 is not responding to queries.

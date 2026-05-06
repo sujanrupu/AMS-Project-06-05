@@ -1,0 +1,21 @@
+  "title": "Microsoft Authentication Failed",
+  "category": "Security",
+  "severity": "P2",
+  "keywords": "microsoft login failure, aad auth error, office365 login issue, token expired",
+  "symptoms": "Users unable to log in to Microsoft services like Outlook, Teams, or Azure AD. Error messages like 'Authentication failed', 'Invalid token', or repeated login prompts.",
+  "resolution_steps": "",
+  "escalation_team": "Identity & Access Management",
+  "owner": "IAM Team",
+  "estimated_resolution_time": "30-60 minutes",
+  "ci_asset": "Azure AD / Office365"
+
+  "title": "Email Notification Delay",
+  "category": "Application",
+  "severity": "P3",
+  "keywords": "email delay, notification lag, smtp queue delay, mail delivery slow",
+  "symptoms": "Emails are being triggered but delivered with significant delay. Users report late notifications or batch delivery instead of real-time alerts.",
+  "resolution_steps": "",
+  "escalation_team": "Messaging / Email Services",
+  "owner": "Messaging Team",
+  "estimated_resolution_time": "45-90 minutes",
+  "ci_asset": "SMTP Server / Notification Service"
