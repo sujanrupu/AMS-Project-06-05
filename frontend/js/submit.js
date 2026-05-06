@@ -4,6 +4,7 @@ async function submitTicket() {
   const text      = document.getElementById("btnText");
   const resultBox = document.getElementById("resultBox");
 
+  // Safety check for missing DOM elements
   if (!btn || !loader || !text) {
     console.error("❌ Missing required DOM elements");
     return;
@@ -41,6 +42,7 @@ async function submitTicket() {
   btn.disabled = true;
 
   try {
+    // Make API request to submit ticket
     const res = await apiRequest("/submit", "POST", data);
 
     // ── BACKEND ERROR ──
@@ -59,12 +61,14 @@ async function submitTicket() {
     // ── SUCCESS ──
     if (resultBox) {
       resultBox.innerHTML = `
-        <p class="text-green-400 font-semibold">Ticket registered successfully 🎉</p>
+        <p class="text-green-400 font-semibold">
+          Ticket registered successfully 🎉
+        </p>
         <p><b>Ticket ID:</b> ${res.id || "-"}</p>
       `;
     }
 
-    // Clear form
+    // Clear form fields safely
     ["name", "email", "summary", "description"].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = "";
@@ -79,6 +83,7 @@ async function submitTicket() {
     }
 
   } finally {
+    // Always stop loader and reset button text
     loader.classList.add("hidden");
     text.textContent = "Submit";
     btn.disabled = false;

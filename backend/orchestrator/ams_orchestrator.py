@@ -1,8 +1,11 @@
+# orchestrator/ams_orchestrator.py
+
 from modules.duplicate_detection.handler import handle_duplicate_flow
 from modules.priority_sla.handler        import handle_priority_sla
 from modules.runbook_execution.handler   import handle_runbook_flow
 
 from repositories.ticket_repository import update_ticket_priority
+from services.slack_service import send_to_slack
 
 
 # ─────────────────────────────────────────────
@@ -18,16 +21,16 @@ async def handle_ticket(data):
         "message": None,
 
         # priority/sla defaults
-        "priority":             None,
-        "priority_label":       None,
-        "sla_response_time":    None,
-        "sla_resolution_time":  None,
-        "is_duplicate":         False,
+        "priority":            None,
+        "priority_label":      None,
+        "sla_response_time":   None,
+        "sla_resolution_time": None,
+        "is_duplicate":        False,
 
         # runbook defaults
         "runbook_title":    None,
         "runbook_category": None,
-        "runbook_owner": None,
+        "runbook_owner":    None,
         "runbook_ci_asset": None,
         "match_type":       None,
         "checklist_steps":  [],
@@ -63,8 +66,8 @@ async def handle_ticket(data):
                 issue_key=issue_key,
                 priority=state.get("priority"),
                 sla={
-                    "response_time":    state.get("sla_response_time"),
-                    "resolution_time":  state.get("sla_resolution_time")
+                    "response_time":   state.get("sla_response_time"),
+                    "resolution_time": state.get("sla_resolution_time")
                 },
                 label=state.get("priority_label")
             )

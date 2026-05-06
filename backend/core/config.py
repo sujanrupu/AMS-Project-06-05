@@ -13,4 +13,10 @@ class Config:
     SUPABASE_URL = os.getenv("SUPABASE_URL")
     SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
+<<<<<<< HEAD
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+=======
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+    SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
+>>>>>>> d0486dcc903ac38b1d8a01d690a0881436a94549

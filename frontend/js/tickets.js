@@ -1,5 +1,7 @@
 let updatingTickets = new Set();
 
+
+// ───────────── LOAD TICKETS ─────────────
 async function loadTickets() {
   try {
     const res = await apiRequest("/tickets");
@@ -46,9 +48,36 @@ async function loadTickets() {
           </span>
         </div>
 
+        <!-- ESCALATION LABEL (if any) -->
+        ${!isCompleted ? (() => {
+          const esc = localStorage.getItem(`esc_${t.issue_key}`);
+
+          if (!esc) {
+            return `
+              <div class="px-4 py-2 border-b border-purple/10 bg-surface2">
+                <span class="mono text-[0.65rem] text-yellow bg-yellow/10 px-2 py-0.5 rounded-full">
+                  Status: Assigned to L1
+                </span>
+              </div>
+            `;
+          }
+
+          const priority = (t.priority || "").toUpperCase();
+          const level = (priority === "P1" || priority === "P2") ? "L3" : "L2";
+
+          return `
+            <div class="escalation-label px-4 py-2 border-b border-purple/10 bg-blue-900/10 rounded-b-lg flex items-center gap-2">
+              <span class="mono text-[0.65rem] text-white/90 bg-blue-700/30 px-2 py-0.5 rounded-full">
+                🚀 Escalated to ${level} (${esc})
+              </span>
+            </div>
+          `;
+        })() : ''}
+
         <!-- CARD BODY -->
         <div class="px-4 py-3 space-y-2 text-sm">
 
+          <!-- 1. Name + Email -->
           <div class="grid grid-cols-2 gap-x-4 gap-y-2">
             <div>
               <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-0.5">Name</span>
@@ -60,16 +89,19 @@ async function loadTickets() {
             </div>
           </div>
 
+          <!-- 2. Summary -->
           <div>
             <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-0.5">Summary</span>
             <span class="text-slate-200 text-xs">${t.summary || "-"}</span>
           </div>
 
+          <!-- 3. Description -->
           <div>
             <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-0.5">Description</span>
             <span class="text-slate-300 text-xs leading-relaxed line-clamp-2">${t.description || "-"}</span>
           </div>
 
+          <!-- 4. Priority + SLA Response + SLA Resolution -->
           <div class="grid grid-cols-2 gap-x-4 gap-y-2 pt-1">
             <div>
               <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-0.5">Priority</span>
@@ -85,6 +117,7 @@ async function loadTickets() {
             </div>
           </div>
 
+          <!-- 5. Status control -->
           ${!isCompleted ? `
             <div class="flex items-center gap-2 pt-1">
               <span class="mono text-[0.6rem] text-muted uppercase tracking-widest">Update Status</span>
@@ -279,6 +312,14 @@ async function updateStatus(issueKey, dropdown) {
       return;
     }
 
+    // Remove escalation label + localStorage on completion
+    localStorage.removeItem(`esc_${issueKey}`);
+    const card = document.getElementById(`ticket-${issueKey}`);
+    if (card) {
+      const old = card.querySelector(".escalation-label");
+      if (old) old.remove();
+    }
+
     setTimeout(() => {
       updatingTickets.delete(issueKey);
       loadTickets();
@@ -315,6 +356,7 @@ async function openChildTickets(parentKey) {
     modal.innerHTML = `
       <div class="bg-surface border border-purple/15 rounded-2xl w-[620px] max-h-[80vh] overflow-auto relative shadow-2xl animate-slideUp">
 
+        <!-- MODAL HEADER -->
         <div class="flex items-center justify-between px-6 py-4 bg-surface2 border-b border-purple/15 sticky top-0">
           <div>
             <h2 class="font-bold text-purple">Child Tickets</h2>
@@ -326,14 +368,14 @@ async function openChildTickets(parentKey) {
           >✕</button>
         </div>
 
+        <!-- MODAL BODY -->
         <div class="p-6 space-y-4">
-          ${
-            children.length === 0
-              ? `<div class="mono text-center py-8 text-muted text-sm">
-                   <div class="text-3xl mb-3">📭</div>
-                   <div>No child tickets found</div>
-                 </div>`
-              : children.map(c => `
+          ${children.length === 0
+            ? `<div class="mono text-center py-8 text-muted text-sm">
+                 <div class="text-3xl mb-3">📭</div>
+                 <div>No child tickets found</div>
+               </div>`
+            : children.map(c => `
                 <div class="bg-surface2 border border-purple/10 rounded-xl p-4 space-y-2">
                   <div class="flex items-center justify-between">
                     <span class="mono text-yellow text-xs font-bold">${c.issue_key}</span>

@@ -161,8 +161,7 @@ async def update_ticket_priority(issue_key: str, priority: str, sla: dict, label
 
 # ─────────────────────────────────────────────
 # UPDATE TICKET RUNBOOK
-# Only persists: checklist_steps, commands,
-#                runbook_title, runbook_category, match_type
+# Persists checklist, commands, and runbook metadata
 # ─────────────────────────────────────────────
 async def update_ticket_runbook(
     issue_key:               str,
@@ -192,25 +191,26 @@ async def update_ticket_runbook(
     except Exception as e:
         print(f"❌ update_ticket_runbook error: {e}")
         return False
-    
+
+
 # ─────────────────────────────────────────────
 # UPDATE TICKET RCA
 # ─────────────────────────────────────────────
 async def update_ticket_rca(
     issue_key:          str,
     root_cause:         str,
-    affected_component: str = None,
+    affected_component: str  = None,
     resolution_steps:   list = None,
-    confidence:         str = None,
+    confidence:         str  = None,
 ) -> bool:
     try:
         res = (
             supabase.table("tickets")
             .update({
-                "rca_root_cause":   root_cause,
-                "rca_affected":     affected_component,
-                "rca_steps":        resolution_steps or [],
-                "rca_confidence":   confidence,
+                "rca_root_cause": root_cause,
+                "rca_affected":   affected_component,
+                "rca_steps":      resolution_steps or [],
+                "rca_confidence": confidence,
             })
             .eq("issue_key", issue_key)
             .execute()
@@ -220,7 +220,8 @@ async def update_ticket_rca(
     except Exception as e:
         print(f"❌ update_ticket_rca error: {e}")
         return False
-    
+
+
 # ─────────────────────────────────────────────
 # VECTOR SEARCH ON COMPLETED PARENT TICKETS WITH RCA
 # ─────────────────────────────────────────────
@@ -244,7 +245,10 @@ async def search_completed_tickets_with_rca(query_embedding: list, top_k: int = 
 
         full = (
             supabase.table("tickets")
-            .select("issue_key, summary, description, rca_root_cause, rca_affected, rca_steps, rca_confidence")
+            .select(
+                "issue_key, summary, description, "
+                "rca_root_cause, rca_affected, rca_steps, rca_confidence"
+            )
             .in_("issue_key", issue_keys)
             .eq("status", "Completed")
             .is_("parent_ticket_key", "null")

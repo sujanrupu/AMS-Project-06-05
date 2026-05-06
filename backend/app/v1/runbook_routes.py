@@ -9,6 +9,7 @@ from repositories.ticket_repository import (
 from repositories.runbook_repository import insert_runbook
 from modules.runbook_execution.handler import handle_runbook_flow
 from services.embedding_service import get_embedding
+from services.slack_service import send_to_slack
 
 router = APIRouter()
 
@@ -33,7 +34,10 @@ async def get_runbook(issueKey: str):
                 "parent_ticket_key": parent_key,
             }
 
-        # ── cache hit ──
+        # ─────────────────────────────
+        # CACHE HIT (PURE READ ONLY)
+        # ─────────────────────────────
+        # MY version: checks `is not None` (safer — allows empty list cache)
         if ticket.get("checklist_steps") is not None and ticket.get("commands") is not None:
             print(f"📦 [{issueKey}] CACHE HIT")
             return {
@@ -43,11 +47,16 @@ async def get_runbook(issueKey: str):
                 "runbook_category":         ticket.get("runbook_category"),
                 "runbook_escalation_team":  ticket.get("runbook_escalation_team"),
                 "match_type":               ticket.get("match_type"),
+                "slack_channel":            ticket.get("slack_channel"),
+                "team":                     ticket.get("runbook_escalation_team"),
                 "message":                  "Loaded from cache",
             }
 
-        # ── cache miss → run agent ──
+        # ─────────────────────────────
+        # CACHE MISS → RUN AGENT ONLY
+        # ─────────────────────────────
         print(f"🤖 [{issueKey}] CACHE MISS — calling LLM...")
+
         state = {
             "id":      issueKey,
             "summary": ticket.get("summary", ""),
@@ -69,14 +78,19 @@ async def get_runbook(issueKey: str):
             for i, cmd in enumerate(raw_commands)
         ]
 
-        # ── cache in DB ──
+        final_category  = result.get("runbook_category")
+        escalation_team = result.get("runbook_escalation_team")
+
+        # ─────────────────────────────
+        # CACHE IN DB (NO SLACK HERE)
+        # ─────────────────────────────
         await update_ticket_runbook(
             issueKey,
             checklist_steps,
             commands,
             runbook_title           = result.get("runbook_title"),
-            runbook_category        = result.get("runbook_category"),
-            runbook_escalation_team = result.get("runbook_escalation_team"),
+            runbook_category        = final_category,
+            runbook_escalation_team = escalation_team,
             match_type              = result.get("match_type"),
         )
         print(f"💾 [{issueKey}] Runbook cached in Supabase")
@@ -85,9 +99,11 @@ async def get_runbook(issueKey: str):
             "checklist":                checklist_steps,
             "commands":                 commands,
             "runbook_title":            result.get("runbook_title"),
-            "runbook_category":         result.get("runbook_category"),
-            "runbook_escalation_team":  result.get("runbook_escalation_team"),
+            "runbook_category":         final_category,
+            "runbook_escalation_team":  escalation_team,
             "match_type":               result.get("match_type"),
+            "slack_channel":            None,
+            "team":                     escalation_team,
             "message":                  result.get("message"),
         }
 
@@ -115,7 +131,6 @@ async def create_runbook(data: dict):
                 "message": "title, category, severity, escalation_team, and resolution_steps are required"
             }
 
-        # ✅ same format as backfill script
         embed_text = f"""
     Title: {title}
     Category: {category}
@@ -129,18 +144,18 @@ async def create_runbook(data: dict):
             embedding = [float(x) for x in embedding]
 
         payload = {
-            "title":                    title,
-            "category":                 category,
-            "severity":                 severity,
-            "keywords":                 data.get("keywords")                  or title,
-            "symptoms":                 data.get("symptoms")                  or "",
-            "resolution_steps":         steps,
-            "escalation_team":          escalation_team,
-            "owner":                    data.get("owner")                     or None,
-            "estimated_resolution_time":data.get("estimated_resolution_time") or None,
-            "ci_asset":                 data.get("ci_asset")                  or None,
-            "status":                   "Active",
-            "embedding":                embedding,
+            "title":                     title,
+            "category":                  category,
+            "severity":                  severity,
+            "keywords":                  data.get("keywords")                   or title,
+            "symptoms":                  data.get("symptoms")                   or "",
+            "resolution_steps":          steps,
+            "escalation_team":           escalation_team,
+            "owner":                     data.get("owner")                      or None,
+            "estimated_resolution_time": data.get("estimated_resolution_time")  or None,
+            "ci_asset":                  data.get("ci_asset")                   or None,
+            "status":                    "Active",
+            "embedding":                 embedding,
         }
 
         saved = await insert_runbook(payload)
@@ -159,3 +174,79 @@ async def create_runbook(data: dict):
     except Exception as e:
         print(f"❌ create_runbook error: {e}")
         return {"type": "error", "message": str(e)}
+
+
+# ───────────── ESCALATE TICKET ─────────────
+@router.post("/tickets/{issueKey}/escalate")
+async def escalate_ticket(issueKey: str):
+    try:
+        tickets = await get_all_tickets()
+        ticket  = next((t for t in tickets if t["issue_key"] == issueKey), None)
+
+        if not ticket:
+            raise HTTPException(status_code=404, detail=f"Ticket {issueKey} not found")
+
+        # ─────────────────────────────
+        # BUILD ESCALATION STATE
+        # ─────────────────────────────
+        state = {
+            "id":               issueKey,
+            "summary":          ticket.get("summary", ""),
+            "priority":         ticket.get("priority"),
+            "match_type":       ticket.get("match_type"),
+            "runbook_category": ticket.get("runbook_category"),
+        }
+
+        # ─────────────────────────────
+        # SLACK ROUTING
+        # ─────────────────────────────
+        result = await send_to_slack(state)
+
+        if not result or not result.get("success"):
+            raise HTTPException(
+                status_code=500,
+                detail=f"Slack routing failed: {result.get('error') if result else 'Unknown error'}"
+            )
+
+        # ─────────────────────────────
+        # FINAL CATEGORY + TEAM RESOLUTION
+        # ─────────────────────────────
+        final_category = (
+            ticket.get("runbook_category")
+            or result.get("team")
+        )
+
+        final_team = (
+            ticket.get("runbook_escalation_team")
+            or result.get("team")
+        )
+
+        # ─────────────────────────────
+        # PERSIST ONLY IF MISSING
+        # ─────────────────────────────
+        if not ticket.get("runbook_category") and final_category:
+            await update_ticket_runbook(
+                issueKey,
+                ticket.get("checklist_steps"),
+                ticket.get("commands"),
+                runbook_title           = ticket.get("runbook_title"),
+                runbook_category        = final_category,
+                runbook_escalation_team = final_team,
+                match_type              = ticket.get("match_type"),
+            )
+
+        return {
+            "type":             "success",
+            "message":          "Ticket escalated successfully",
+            "team":             final_team,
+            "channel":          result.get("channel"),
+            "match_type":       result.get("match_type"),
+            "runbook_category": final_category,
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        print(f"❌ escalate_ticket error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

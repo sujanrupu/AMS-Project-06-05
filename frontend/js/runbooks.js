@@ -11,9 +11,9 @@ if (issueKey !== "UNKNOWN" && issueKey.includes(".")) {
 
 document.getElementById("ticketBadge").textContent = issueKey;
 
-let checkedItems    = new Set();
-let isAiFallback    = false;
-let escalationTeam  = null;
+let checkedItems   = new Set();
+let isAiFallback   = false;
+let escalationTeam = null;
 
 
 // ─────────────────────────────────────────────
@@ -90,9 +90,10 @@ function showResolutionPrompt() {
 async function onResolved(success) {
   document.getElementById("resolutionPrompt")?.remove();
 
+  // ── YES FLOW ──
   if (success) {
 
-    // ── Auto-complete the ticket ──
+    // Auto-complete the ticket
     try {
       const res = await apiRequest(`/tickets/${issueKey}/complete`, "PUT");
       if (res?.error) {
@@ -105,7 +106,7 @@ async function onResolved(success) {
       console.error("❌ Auto-complete error:", err);
     }
 
-    // ── AI fallback → open create runbook modal ──
+    // AI fallback → open create runbook modal
     if (isAiFallback) {
       showCreateRunbookModal();
     } else {
@@ -125,25 +126,30 @@ async function onResolved(success) {
       document.getElementById("mainContent").appendChild(msg);
     }
 
+  // ── NO FLOW → Slack escalation ──
   } else {
 
-    const teamLine = (!isAiFallback && escalationTeam)
-      ? `Escalate to: <strong style="color:#e2e8f0">${escalationTeam}</strong>`
-      : `Contact <strong style="color:#e2e8f0">L2/L3 Support</strong> for further investigation.`;
+    (async () => {
+      await routeToSlack(issueKey, escalationTeam);
 
-    const msg = document.createElement("div");
-    msg.className       = "section-card";
-    msg.style.marginTop = "1rem";
-    msg.innerHTML = `
-      <div style="padding:1.5rem;text-align:center">
-        <p style="font-size:.9rem;color:#f87171;font-weight:700;margin-bottom:.5rem">
-          ⚠ Issue Not Resolved
-        </p>
-        <p style="font-size:.825rem;color:#94a3b8;line-height:1.7">
-          ${teamLine}
-        </p>
-      </div>`;
-    document.getElementById("mainContent").appendChild(msg);
+      const teamLine = (!isAiFallback && escalationTeam)
+        ? `Escalate to: <strong style="color:#e2e8f0">${escalationTeam}</strong>`
+        : `Contact <strong style="color:#e2e8f0">L2/L3 Support</strong> for further investigation.`;
+
+      const msg = document.createElement("div");
+      msg.className       = "section-card";
+      msg.style.marginTop = "1rem";
+      msg.innerHTML = `
+        <div style="padding:1.5rem;text-align:center">
+          <p style="font-size:.9rem;color:#f87171;font-weight:700;margin-bottom:.5rem">
+            ⚠ Issue Not Resolved
+          </p>
+          <p style="font-size:.825rem;color:#94a3b8;line-height:1.7">
+            ${teamLine}
+          </p>
+        </div>`;
+      document.getElementById("mainContent").appendChild(msg);
+    })();
   }
 }
 
@@ -172,11 +178,10 @@ function showCompletedBanner() {
       Ticket ${issueKey} marked as Completed
     </span>`;
 
-  // Insert at top of mainContent so it's always visible
   const main = document.getElementById("mainContent");
   main.insertBefore(banner, main.firstChild);
 
-  // ── Update ticket badge in header instantly ──
+  // Update ticket badge instantly
   const ticketBadge = document.getElementById("ticketBadge");
   if (ticketBadge) {
     ticketBadge.textContent      = `${issueKey} · Completed`;
@@ -185,8 +190,52 @@ function showCompletedBanner() {
     ticketBadge.style.border     = "1px solid rgba(74,222,128,.2)";
   }
 
-  // ── Update status bar instantly ──
+  // Update status bar instantly
   setStatus("done", `Ticket ${issueKey} completed`);
+}
+
+
+// ─────────────────────────────────────────────
+// SLACK ROUTING
+// ─────────────────────────────────────────────
+async function routeToSlack(ticketId, team) {
+  try {
+    const res = await apiRequest(`/tickets/${ticketId}/escalate`, "POST");
+
+    if (res?.error || res?.type === "error") {
+      console.error("❌ Slack routing failed:", res);
+      return null;
+    }
+
+    // Update escalation label on ticket card if visible
+    if (res.channel) {
+      updateEscalationLabel(ticketId, res.channel);
+      localStorage.setItem(`esc_${ticketId}`, res.channel);
+    }
+
+    return res;
+
+  } catch (err) {
+    console.error("❌ Slack routing error:", err);
+    return null;
+  }
+}
+
+function updateEscalationLabel(issueKey, channel) {
+  const card = document.getElementById(`ticket-${issueKey}`);
+  if (!card) return;
+
+  const old = card.querySelector(".escalation-label");
+  if (old) old.remove();
+
+  const label = document.createElement("div");
+  label.className = "escalation-label px-4 py-2 border-b border-purple/10";
+  label.innerHTML = `
+    <span class="mono text-[0.65rem] text-blue-400">
+      🚀 Escalated to: ${channel}
+    </span>
+  `;
+  card.insertBefore(label, card.children[1]);
 }
 
 
@@ -249,6 +298,7 @@ function showCreateRunbookModal() {
       <!-- Modal Body -->
       <div style="padding:1.5rem;display:flex;flex-direction:column;gap:1rem">
 
+        <!-- Row 1: Title + Category -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
           <div>
             <label class="form-label">Title *</label>
@@ -270,6 +320,7 @@ function showCreateRunbookModal() {
           </div>
         </div>
 
+        <!-- Row 2: Severity + Keywords -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
           <div>
             <label class="form-label">Severity *</label>
@@ -287,6 +338,7 @@ function showCreateRunbookModal() {
           </div>
         </div>
 
+        <!-- Row 3: Escalation Team + Owner -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
           <div>
             <label class="form-label">Escalation Team *</label>
@@ -298,6 +350,7 @@ function showCreateRunbookModal() {
           </div>
         </div>
 
+        <!-- Row 4: Est. Resolution Time + CI Asset -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
           <div>
             <label class="form-label">Est. Resolution Time</label>
@@ -309,18 +362,21 @@ function showCreateRunbookModal() {
           </div>
         </div>
 
+        <!-- Symptoms -->
         <div>
           <label class="form-label">Symptoms</label>
           <textarea class="form-input" id="rb_symptoms" rows="3"
             placeholder="What does this incident look like? What errors appear?"></textarea>
         </div>
 
+        <!-- Resolution Steps -->
         <div>
           <label class="form-label">Resolution Steps *</label>
           <textarea class="form-input" id="rb_steps" rows="5"
             placeholder="1. Check service status&#10;2. Review logs&#10;3. Restart if required"></textarea>
         </div>
 
+        <!-- Actions -->
         <div style="display:flex;gap:.75rem;justify-content:flex-end;padding-top:.25rem">
           <button onclick="closeRunbookModal()"
             style="background:none;border:1px solid rgba(255,255,255,.1);color:#64748b;
@@ -552,10 +608,25 @@ function showAiFallbackBanner() {
 // MAIN RENDER
 // ─────────────────────────────────────────────
 function renderRunbook(data) {
+  console.log("Render data:", data);
+
   document.getElementById("skeletonLoader")?.remove();
 
-  isAiFallback   = data.match_type === "ai_fallback";
-  escalationTeam = data.runbook_escalation_team || null;
+  if (!data) {
+    setStatus("error", "No data received");
+    return;
+  }
+
+  isAiFallback = data.match_type === "ai_fallback";
+
+  if (isAiFallback) {
+    escalationTeam          = data.runbook_escalation_team || data.team || null;
+    window.slackChannel     = data.team || data.slack_channel || null;
+    window.lastRunbookCategory = data.runbook_category ?? data.team ?? window.slackChannel ?? "L2/L3 Support Team";
+  } else {
+    escalationTeam             = data.runbook_escalation_team || null;
+    window.lastRunbookCategory = data.runbook_category || null;
+  }
 
   if (isAiFallback) {
     showAiFallbackBanner();
@@ -565,8 +636,8 @@ function renderRunbook(data) {
 
   const checklist = data.checklist || data.checks || [];
   const commands  = data.commands  || data.steps  || [];
-  const rca       = data.rca       || data.root_cause  || null;
-  const recs      = data.recommendations || data.notes || null;
+  const rca       = data.rca       || data.root_cause        || null;
+  const recs      = data.recommendations || data.notes       || null;
 
   const timeStr = new Date().toLocaleTimeString();
   let html = "";
@@ -583,19 +654,25 @@ function renderRunbook(data) {
         </div>`;
     }).join("");
 
-    const sectionTitle = isAiFallback ? "AI Generated Steps" : "Pre-flight Checklist";
-    const rightText    = isAiFallback ? timeStr : "";
-
     html += buildCard(
-      "✅", sectionTitle, `${checklist.length} items`,
-      "checklist", `<div class="checklist">${items}</div>`, 0.05, rightText
+      "✅",
+      isAiFallback ? "AI Generated Steps" : "Pre-flight Checklist",
+      `${checklist.length} items`,
+      "checklist",
+      `<div class="checklist">${items}</div>`,
+      0.05,
+      isAiFallback ? timeStr : ""
     );
   }
 
   if (commands.length) {
     const cmds = commands.map((cmd, i) => {
-      const label   = typeof cmd === "string" ? `Command ${i + 1}` : (cmd.label || cmd.name || `Command ${i + 1}`);
-      const command = typeof cmd === "string" ? cmd : (cmd.command || cmd.cmd || cmd.script || "");
+      const label   = typeof cmd === "string"
+        ? `Command ${i + 1}`
+        : (cmd.label || cmd.name || `Command ${i + 1}`);
+      const command = typeof cmd === "string"
+        ? cmd
+        : (cmd.command || cmd.cmd || cmd.script || "");
       return `
         <div class="command-block">
           <div class="cmd-header">
@@ -613,7 +690,7 @@ function renderRunbook(data) {
     );
   }
 
-  if (rca)  html += buildCard("🔍", "Root Cause Analysis", "", "rca",
+  if (rca) html += buildCard("🔍", "Root Cause Analysis", "", "rca",
     `<p style="font-size:.875rem;line-height:1.7">${rca}</p>`, 0.15);
 
   if (recs) html += buildCard("💡", "Recommendations", "", "recs",
