@@ -3,10 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.v1.ticket_routes  import router as ticket_router
 from app.v1.runbook_routes import router as runbook_router
-<<<<<<< HEAD
 from app.v1.rca_routes     import router as rca_router
-=======
->>>>>>> d0486dcc903ac38b1d8a01d690a0881436a94549
 
 app = FastAPI()
 
@@ -32,9 +29,5 @@ async def global_exception_handler(request, exc):
     )
 
 app.include_router(ticket_router,  prefix="/api")
-<<<<<<< HEAD
 app.include_router(runbook_router, prefix="/api")
-app.include_router(rca_router,     prefix="/api")   
-=======
-app.include_router(runbook_router, prefix="/api")
->>>>>>> d0486dcc903ac38b1d8a01d690a0881436a94549
+app.include_router(rca_router,     prefix="/api")
