@@ -4,7 +4,7 @@ import re
 
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
-from .prompt import MATCH_PROMPT, GENERATE_PROMPT
+from .prompt import GENERATE_PROMPT, SAME_ISSUE_PROMPT
 
 load_dotenv()
 
@@ -24,27 +24,18 @@ def _clean_llm_output(raw: str) -> str:
     return raw
 
 
-def pick_best_match(current: dict, candidates: list) -> dict | None:
+def is_same_issue(current: dict, past: dict) -> tuple[bool, str]:
     """
-    LLM picks the best matching past ticket from candidates.
-    Returns matched ticket dict or None if no meaningful match.
+    LLM decides if current incident is the same type as the past one.
+    Returns (is_same: bool, confidence: str)
     """
-    formatted = ""
-    for i, t in enumerate(candidates):
-        formatted += (
-            f"\nCandidate {i}:\n"
-            f"  Summary: {t.get('summary', 'N/A')}\n"
-            f"  Description: {t.get('description', 'N/A')}\n"
-            f"  Root Cause: {t.get('rca_root_cause', 'N/A')}\n"
-            f"  Affected: {t.get('rca_affected', 'N/A')}\n"
-            f"  Resolution: {' | '.join(t.get('rca_steps', []) or [])}\n"
-        )
-
-    prompt = MATCH_PROMPT.format(
+    prompt = SAME_ISSUE_PROMPT.format(
         summary=current.get("summary", ""),
         description=current.get("description", ""),
-        candidates=formatted,
-        count=len(candidates) - 1,
+        past_summary=past.get("summary", ""),
+        past_description=past.get("description", ""),
+        past_root_cause=past.get("rca_root_cause", ""),
+        past_affected=past.get("rca_affected", ""),
     )
 
     try:
@@ -52,25 +43,22 @@ def pick_best_match(current: dict, candidates: list) -> dict | None:
         raw      = _clean_llm_output(response.content)
         result   = json.loads(raw)
 
-        if result.get("no_match"):
-            return None
+        same       = bool(result.get("is_same_issue", False))
+        confidence = str(result.get("confidence", "LOW")).upper()
+        reason     = result.get("reason", "")
 
-        index = result.get("best_match_index")
-        if not isinstance(index, int) or index < 0 or index >= len(candidates):
-            return None
-
-        matched = candidates[index]
-        matched["rca_confidence"] = str(result.get("confidence", "LOW")).upper()
-        return matched
+        print(f"[RCAAgent] Same issue: {same} | Confidence: {confidence} | Reason: {reason}")
+        return same, confidence
 
     except Exception as e:
-        print(f"[RCAAgent] pick_best_match failed: {e}")
-        return None
+        print(f"[RCAAgent] is_same_issue failed: {e}")
+        return False, "LOW"
 
 
 def generate_fresh_rca(current: dict) -> dict:
     """
-    LLM generates a brand new RCA when no similar past tickets exist.
+    LLM generates a brand new RCA when no similar past tickets exist
+    or past ticket is a different issue.
     """
     prompt = GENERATE_PROMPT.format(
         summary=current.get("summary", ""),

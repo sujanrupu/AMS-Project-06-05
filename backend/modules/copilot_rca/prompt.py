@@ -1,30 +1,3 @@
-MATCH_PROMPT = """
-You are an IT incident matching engine.
-
-Your job is to find which past resolved incident best matches the current incident.
-
-Current Incident:
-Summary: {summary}
-Description: {description}
-
-Past Resolved Incidents:
-{candidates}
-
-Rules:
-- Return ONLY valid JSON. No text before or after. No markdown.
-- Pick the index (0 to {count}) of the past incident most similar to the current one.
-- Base similarity on: affected component, failure mode, and symptoms.
-- If none are meaningfully similar set no_match to true.
-- confidence must be HIGH, MEDIUM, or LOW.
-
-Respond ONLY with valid JSON:
-{{
-  "best_match_index": 0,
-  "confidence": "HIGH|MEDIUM|LOW",
-  "no_match": false
-}}
-"""
-
 GENERATE_PROMPT = """
 You are a Senior IT Root Cause Analysis (RCA) engine.
 
@@ -56,5 +29,38 @@ Respond ONLY with valid JSON:
     "Step 3 ..."
   ],
   "confidence": "HIGH|MEDIUM|LOW"
+}}
+"""
+
+
+SAME_ISSUE_PROMPT = """
+You are an IT incident comparison engine.
+
+Your job is to decide if a new incident is the SAME type of issue as a past resolved incident.
+
+Same issue means: same root cause category, same affected component type, same failure mode.
+Different issue means: different root cause, different system layer, or fundamentally different failure.
+
+New Incident:
+Summary: {summary}
+Description: {description}
+
+Past Resolved Incident:
+Summary: {past_summary}
+Description: {past_description}
+Root Cause: {past_root_cause}
+Affected Component: {past_affected}
+
+Rules:
+- Return ONLY valid JSON. No text before or after. No markdown.
+- is_same_issue must be true or false.
+- confidence must be HIGH, MEDIUM, or LOW.
+- reason must be one short sentence explaining your decision.
+
+Respond ONLY with valid JSON:
+{{
+  "is_same_issue": true,
+  "confidence": "HIGH|MEDIUM|LOW",
+  "reason": "one sentence explanation"
 }}
 """

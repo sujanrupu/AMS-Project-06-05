@@ -77,7 +77,6 @@ async function loadTickets() {
         <!-- CARD BODY -->
         <div class="px-4 py-3 space-y-2 text-sm">
 
-          <!-- 1. Name + Email -->
           <div class="grid grid-cols-2 gap-x-4 gap-y-2">
             <div>
               <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-0.5">Name</span>
@@ -89,19 +88,16 @@ async function loadTickets() {
             </div>
           </div>
 
-          <!-- 2. Summary -->
           <div>
             <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-0.5">Summary</span>
             <span class="text-slate-200 text-xs">${t.summary || "-"}</span>
           </div>
 
-          <!-- 3. Description -->
           <div>
             <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-0.5">Description</span>
             <span class="text-slate-300 text-xs leading-relaxed line-clamp-2">${t.description || "-"}</span>
           </div>
 
-          <!-- 4. Priority + SLA Response + SLA Resolution -->
           <div class="grid grid-cols-2 gap-x-4 gap-y-2 pt-1">
             <div>
               <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-0.5">Priority</span>
@@ -117,7 +113,6 @@ async function loadTickets() {
             </div>
           </div>
 
-          <!-- 5. Status control -->
           ${!isCompleted ? `
             <div class="flex items-center gap-2 pt-1">
               <span class="mono text-[0.6rem] text-muted uppercase tracking-widest">Update Status</span>
@@ -232,19 +227,40 @@ async function openRCA(issueKey) {
     document.getElementById("rcaBody").innerHTML = `
       <div class="space-y-5">
 
-        <!-- CONFIDENCE BADGE + CACHED -->
+        <!-- TOP ROW: CONFIDENCE + SOURCE BADGES -->
         <div class="flex items-center gap-2 flex-wrap">
           <span class="mono text-xs px-3 py-1 rounded-full border ${confColor} font-semibold">
             ${res.confidence || "LOW"}
           </span>
           <span class="mono text-xs text-muted">${res.confidence_label || ""}</span>
-          ${res.cached
-            ? `<span class="mono text-xs px-2.5 py-0.5 rounded-full border border-purple/20 bg-purple/10 text-purple ml-auto">⚡ Cached</span>`
-            : ''
-          }
+          <div class="ml-auto flex items-center gap-2">
+            ${res.cached
+              ? `<span class="mono text-xs px-2.5 py-0.5 rounded-full border border-purple/20 bg-purple/10 text-purple">⚡ Cached</span>`
+              : ''
+            }
+            ${res.source === "matched"
+              ? `<span class="mono text-xs px-2.5 py-0.5 rounded-full border border-green/20 bg-green/5 text-green">🔗 Matched</span>`
+              : `<span class="mono text-xs px-2.5 py-0.5 rounded-full border border-yellow/20 bg-yellow/5 text-yellow">✨ Generated</span>`
+            }
+          </div>
         </div>
 
-        <!-- SUMMARY -->
+        <!-- MATCHED FROM (only if source = matched) -->
+        ${res.source === "matched" && res.matched_from ? `
+          <div class="bg-surface2 border border-green/15 rounded-xl px-4 py-3 flex items-start gap-3">
+            <span class="text-green text-base flex-shrink-0">🔗</span>
+            <div>
+              <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-1">RCA sourced from past ticket</span>
+              <span class="mono text-xs text-green font-bold">${res.matched_from}</span>
+              ${res.matched_summary
+                ? `<p class="text-xs text-slate-400 mt-1 leading-relaxed">${res.matched_summary}</p>`
+                : ''
+              }
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- SUMMARY LINE -->
         <div class="mono text-xs text-muted italic">${res.summary || ""}</div>
 
         <!-- ROOT CAUSE -->
@@ -312,7 +328,6 @@ async function updateStatus(issueKey, dropdown) {
       return;
     }
 
-    // Remove escalation label + localStorage on completion
     localStorage.removeItem(`esc_${issueKey}`);
     const card = document.getElementById(`ticket-${issueKey}`);
     if (card) {
@@ -356,7 +371,6 @@ async function openChildTickets(parentKey) {
     modal.innerHTML = `
       <div class="bg-surface border border-purple/15 rounded-2xl w-[620px] max-h-[80vh] overflow-auto relative shadow-2xl animate-slideUp">
 
-        <!-- MODAL HEADER -->
         <div class="flex items-center justify-between px-6 py-4 bg-surface2 border-b border-purple/15 sticky top-0">
           <div>
             <h2 class="font-bold text-purple">Child Tickets</h2>
@@ -368,7 +382,6 @@ async function openChildTickets(parentKey) {
           >✕</button>
         </div>
 
-        <!-- MODAL BODY -->
         <div class="p-6 space-y-4">
           ${children.length === 0
             ? `<div class="mono text-center py-8 text-muted text-sm">

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
+from core.constants import RCA_SIMILARITY_THRESHOLD
 from repositories.ticket_repository import (
     get_all_tickets,
     search_completed_tickets_with_rca,
@@ -35,13 +36,16 @@ async def get_rca(issueKey: str):
             affected   = ticket.get("rca_affected", "Unknown")
             print(f"📦 [{issueKey}] CACHE HIT — returning stored RCA (no LLM call)")
             return {
-                "root_cause":       ticket.get("rca_root_cause"),
-                "affected":         affected,
-                "steps":            ticket.get("rca_steps", []),
-                "confidence":       confidence,
-                "confidence_label": get_confidence_label(confidence),
-                "summary":          get_rca_summary(confidence, affected),
-                "cached":           True,
+                "root_cause":        ticket.get("rca_root_cause"),
+                "affected":          affected,
+                "steps":             ticket.get("rca_steps", []),
+                "confidence":        confidence,
+                "confidence_label":  get_confidence_label(confidence),
+                "summary":           get_rca_summary(confidence, affected),
+                "source":            ticket.get("rca_source"),
+                "matched_from":      ticket.get("rca_matched_from"),
+                "matched_summary":   ticket.get("rca_matched_summary"),
+                "cached":            True,
             }
 
         # ── 4. Validate description ──
@@ -54,53 +58,87 @@ async def get_rca(issueKey: str):
                 detail="Ticket has no description — RCA requires description"
             )
 
-        # ── 5. Vector search on completed parent tickets with RCA ──
-        similar_past = []
+        # ── 5. Embed current ticket ──
         query_embedding = await get_embedding(f"{summary} {description}")
 
+        # ── 6. Vector search → top completed parent tickets with RCA ──
+        best = None
         if query_embedding:
             query_embedding = [float(x) for x in query_embedding]
-            matches = await search_completed_tickets_with_rca(query_embedding, top_k=3)
-            similar_past = [
-                t for t in matches
-                if t.get("issue_key") != issueKey
-            ]
-            print(f"[RCA] {len(similar_past)} similar completed tickets found")
+            matches = await search_completed_tickets_with_rca(query_embedding, top_k=5)
 
-        # ── 6. Build state ──
+            # Exclude self, take top result (already sorted by similarity desc)
+            candidates = [t for t in matches if t.get("issue_key") != issueKey]
+
+            if candidates:
+                top        = candidates[0]
+                similarity = top.get("similarity", 0)
+
+                print(f"[RCA] Top match: '{top.get('issue_key')}' similarity={similarity:.3f} threshold={RCA_SIMILARITY_THRESHOLD}")
+
+                if similarity >= RCA_SIMILARITY_THRESHOLD:
+                    best = top
+                    print(f"✅ [{issueKey}] Above threshold — copying RCA from '{top.get('issue_key')}' (0 LLM calls)")
+                else:
+                    print(f"⚠️  [{issueKey}] Below threshold ({similarity:.3f}) — generating fresh RCA")
+
+        # ── 7A. High similarity match — copy RCA directly, no LLM ──
+        if best:
+            confidence = best.get("rca_confidence", "LOW")
+            affected   = best.get("rca_affected", "Unknown")
+
+            await update_ticket_rca(
+                issue_key        = issueKey,
+                root_cause       = best.get("rca_root_cause"),
+                affected_component = affected,
+                resolution_steps = best.get("rca_steps", []),
+                confidence       = confidence,
+                source           = "matched",
+                matched_from     = best.get("issue_key"),
+                matched_summary  = best.get("summary"),
+            )
+            print(f"💾 [{issueKey}] Matched RCA saved from '{best.get('issue_key')}'")
+
+            return {
+                "root_cause":       best.get("rca_root_cause"),
+                "affected":         affected,
+                "steps":            best.get("rca_steps", []),
+                "confidence":       confidence,
+                "confidence_label": get_confidence_label(confidence),
+                "summary":          get_rca_summary(confidence, affected),
+                "source":           "matched",
+                "matched_from":     best.get("issue_key"),
+                "matched_summary":  best.get("summary"),
+                "cached":           False,
+            }
+
+        # ── 7B. Below threshold or no matches — generate fresh RCA via LLM ──
+        print(f"🤖 [{issueKey}] Calling LLM for fresh RCA...")
         state = {
-            "id":           issueKey,
-            "summary":      summary,
-            "data":         ticket,
-            "type":         None,
-            "message":      "",
-            "similar_past": similar_past,
+            "id":      issueKey,
+            "summary": summary,
+            "data":    ticket,
+            "type":    None,
+            "message": "",
         }
-
-        # ── 7. Run RCA handler ──
-        # If similar_past → LLM picks best match → returns that ticket's RCA columns
-        # If no similar_past → LLM generates fresh RCA
-        if similar_past:
-            print(f"🔍 [{issueKey}] {len(similar_past)} candidates — LLM picking best match...")
-        else:
-            print(f"🤖 [{issueKey}] No similar tickets — LLM generating fresh RCA...")
 
         result = await handle_rca_flow(state)
 
         if result.get("type") == "error":
             raise HTTPException(status_code=500, detail=result.get("message"))
 
-        # ── 8. Always persist ──
         await update_ticket_rca(
             issue_key          = issueKey,
             root_cause         = result.get("rca_root_cause"),
             affected_component = result.get("rca_affected"),
             resolution_steps   = result.get("rca_steps", []),
             confidence         = result.get("rca_confidence"),
+            source             = "generated",
+            matched_from       = None,
+            matched_summary    = None,
         )
-        print(f"💾 [{issueKey}] RCA saved — future requests will use cache")
+        print(f"💾 [{issueKey}] Fresh RCA saved")
 
-        # ── 9. Return result ──
         return {
             "root_cause":       result.get("rca_root_cause"),
             "affected":         result.get("rca_affected"),
@@ -108,6 +146,9 @@ async def get_rca(issueKey: str):
             "confidence":       result.get("rca_confidence"),
             "confidence_label": result.get("rca_confidence_label"),
             "summary":          result.get("rca_summary"),
+            "source":           "generated",
+            "matched_from":     None,
+            "matched_summary":  None,
             "cached":           False,
         }
 

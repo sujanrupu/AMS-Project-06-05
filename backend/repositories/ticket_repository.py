@@ -223,10 +223,11 @@ async def update_ticket_rca(
 
 
 # ─────────────────────────────────────────────
-# VECTOR SEARCH ON COMPLETED PARENT TICKETS WITH RCA
+# VECTOR SEARCH — COMPLETED PARENT TICKETS WITH RCA
 # ─────────────────────────────────────────────
-async def search_completed_tickets_with_rca(query_embedding: list, top_k: int = 3) -> list:
+async def search_completed_tickets_with_rca(query_embedding: list, top_k: int = 5) -> list:
     try:
+        # Step 1 — vector search using existing match_tickets RPC
         res = supabase.rpc(
             "match_tickets",
             {
@@ -238,16 +239,25 @@ async def search_completed_tickets_with_rca(query_embedding: list, top_k: int = 
         if not res.data:
             return []
 
+        # Step 2 — extract issue_keys from RPC result
         issue_keys = [t.get("issue_key") for t in res.data if t.get("issue_key")]
 
         if not issue_keys:
             return []
 
+        # Step 3 — build similarity lookup from RPC result
+        similarity_map = {
+            t.get("issue_key"): t.get("similarity", 0)
+            for t in res.data
+        }
+
+        # Step 4 — fetch full rows, filter completed parent tickets with RCA
         full = (
             supabase.table("tickets")
             .select(
-                "issue_key, summary, description, "
-                "rca_root_cause, rca_affected, rca_steps, rca_confidence"
+                "issue_key, summary, description, status, "
+                "parent_ticket_key, rca_root_cause, rca_affected, "
+                "rca_steps, rca_confidence"
             )
             .in_("issue_key", issue_keys)
             .eq("status", "Completed")
@@ -256,9 +266,51 @@ async def search_completed_tickets_with_rca(query_embedding: list, top_k: int = 
             .execute()
         )
 
-        print(f"[RPC] match_tickets_rca filtered results: {full.data}")
-        return full.data or []
+        if not full.data:
+            return []
+
+        # Step 5 — attach similarity score back to each result
+        for t in full.data:
+            t["similarity"] = similarity_map.get(t["issue_key"], 0)
+
+        # Step 6 — sort by similarity descending
+        return sorted(full.data, key=lambda x: x["similarity"], reverse=True)
 
     except Exception as e:
         print(f"❌ search_completed_tickets_with_rca error: {e}")
         return []
+
+
+# ─────────────────────────────────────────────
+# UPDATE TICKET RCA
+# ─────────────────────────────────────────────
+async def update_ticket_rca(
+    issue_key:            str,
+    root_cause:           str,
+    affected_component:   str  = None,
+    resolution_steps:     list = None,
+    confidence:           str  = None,
+    source:               str  = None,
+    matched_from:         str  = None,
+    matched_summary:      str  = None,
+) -> bool:
+    try:
+        res = (
+            supabase.table("tickets")
+            .update({
+                "rca_root_cause":       root_cause,
+                "rca_affected":         affected_component,
+                "rca_steps":            resolution_steps or [],
+                "rca_confidence":       confidence,
+                "rca_source":           source,
+                "rca_matched_from":     matched_from,
+                "rca_matched_summary":  matched_summary,
+            })
+            .eq("issue_key", issue_key)
+            .execute()
+        )
+        return bool(res.data)
+
+    except Exception as e:
+        print(f"❌ update_ticket_rca error: {e}")
+        return False

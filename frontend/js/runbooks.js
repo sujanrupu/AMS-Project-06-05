@@ -1,7 +1,7 @@
 // js/runbooks.js
 
 // ── Parse ticket ID from URL ──
-const params   = new URLSearchParams(window.location.search);
+const params = new URLSearchParams(window.location.search);
 const issueKey = params.get("id") || "UNKNOWN";
 
 // Redirect child tickets to their parent
@@ -11,8 +11,8 @@ if (issueKey !== "UNKNOWN" && issueKey.includes(".")) {
 
 document.getElementById("ticketBadge").textContent = issueKey;
 
-let checkedItems   = new Set();
-let isAiFallback   = false;
+let checkedItems = new Set();
+let isAiFallback = false;
 let escalationTeam = null;
 
 
@@ -20,7 +20,7 @@ let escalationTeam = null;
 // STATUS BAR
 // ─────────────────────────────────────────────
 function setStatus(state, text) {
-  document.getElementById("statusDot").className    = "status-dot " + state;
+  document.getElementById("statusDot").className = "status-dot " + state;
   document.getElementById("statusText").textContent = text;
   document.getElementById("statusTime").textContent = new Date().toLocaleTimeString();
 }
@@ -49,9 +49,9 @@ function showResolutionPrompt() {
   if (document.getElementById("resolutionPrompt")) return;
 
   const prompt = document.createElement("div");
-  prompt.id        = "resolutionPrompt";
+  prompt.id = "resolutionPrompt";
   prompt.className = "section-card";
-  prompt.style.marginTop   = "1rem";
+  prompt.style.marginTop = "1rem";
   prompt.style.borderColor = "rgba(168,85,247,0.3)";
   prompt.innerHTML = `
     <div style="padding:1.5rem;text-align:center">
@@ -90,6 +90,23 @@ function showResolutionPrompt() {
 async function onResolved(success) {
   document.getElementById("resolutionPrompt")?.remove();
 
+  let category = window.lastRunbookCategory;
+  let team = escalationTeam;
+
+  if (isAiFallback) {
+    category = window.lastRunbookCategory || "No Channel";
+    team = escalationTeam || "";
+  }
+
+  const escalationDisplay = isAiFallback
+    ? (category || "No Channel")
+    : (team ? `${category} (${team})` : category);
+
+  const escalationText = `
+    Escalated to:
+    <strong style="color:#e2e8f0">#${escalationDisplay}</strong>
+  `;
+
   // ── YES FLOW ──
   if (success) {
 
@@ -106,51 +123,46 @@ async function onResolved(success) {
       console.error("❌ Auto-complete error:", err);
     }
 
-    // AI fallback → open create runbook modal
     if (isAiFallback) {
       showCreateRunbookModal();
-    } else {
-      const msg = document.createElement("div");
-      msg.className       = "section-card";
-      msg.style.marginTop = "1rem";
-      msg.innerHTML = `
-        <div style="padding:1.5rem;text-align:center">
-          <div style="font-size:2rem;margin-bottom:.75rem">✅</div>
-          <p style="font-size:.95rem;font-weight:700;color:#4ade80;margin-bottom:.4rem">
-            Issue Resolved
-          </p>
-          <p style="font-size:.8rem;color:#64748b;line-height:1.6">
-            Great work! The ticket has been marked as completed.
-          </p>
-        </div>`;
-      document.getElementById("mainContent").appendChild(msg);
+      return;
     }
 
-  // ── NO FLOW → Slack escalation ──
-  } else {
-
-    (async () => {
-      await routeToSlack(issueKey, escalationTeam);
-
-      const teamLine = (!isAiFallback && escalationTeam)
-        ? `Escalate to: <strong style="color:#e2e8f0">${escalationTeam}</strong>`
-        : `Contact <strong style="color:#e2e8f0">L2/L3 Support</strong> for further investigation.`;
-
-      const msg = document.createElement("div");
-      msg.className       = "section-card";
-      msg.style.marginTop = "1rem";
-      msg.innerHTML = `
-        <div style="padding:1.5rem;text-align:center">
-          <p style="font-size:.9rem;color:#f87171;font-weight:700;margin-bottom:.5rem">
-            ⚠ Issue Not Resolved
-          </p>
-          <p style="font-size:.825rem;color:#94a3b8;line-height:1.7">
-            ${teamLine}
-          </p>
-        </div>`;
-      document.getElementById("mainContent").appendChild(msg);
-    })();
+    const msg = document.createElement("div");
+    msg.className = "section-card";
+    msg.style.marginTop = "1rem";
+    msg.innerHTML = `
+      <div style="padding:1.5rem;text-align:center">
+        <div style="font-size:2rem;margin-bottom:.75rem">✅</div>
+        <p style="font-size:.95rem;font-weight:700;color:#4ade80;margin-bottom:.4rem">
+          Issue Resolved
+        </p>
+        <p style="font-size:.8rem;color:#64748b;line-height:1.6">
+          Great work! The ticket has been marked as completed.
+        </p>
+      </div>`;
+    document.getElementById("mainContent").appendChild(msg);
+    return;
   }
+
+  // ── NO FLOW → Slack escalation ──
+  (async () => {
+    await routeToSlack(issueKey, escalationTeam);
+
+    const msg = document.createElement("div");
+    msg.className = "section-card";
+    msg.style.marginTop = "1rem";
+    msg.innerHTML = `
+      <div style="padding:1.5rem;text-align:center">
+        <p style="font-size:.9rem;color:#f87171;font-weight:700;margin-bottom:.5rem">
+          ⚠ Issue Not Resolved
+        </p>
+        <p style="font-size:.825rem;color:#94a3b8;line-height:1.7">
+          ${escalationText}
+        </p>
+      </div>`;
+    document.getElementById("mainContent").appendChild(msg);
+  })();
 }
 
 
@@ -173,15 +185,14 @@ function showCompletedBanner() {
   `;
   banner.innerHTML = `
     <span style="font-size:1.1rem">✅</span>
-    <span style="font-family:'Syne',sans-serif;font-size:.85rem;
-                 font-weight:700;color:#4ade80">
+    <span style="font-family:'Syne',sans-serif;font-size:.85rem;font-weight:700;color:#4ade80">
       Ticket ${issueKey} marked as Completed
     </span>`;
 
   const main = document.getElementById("mainContent");
   main.insertBefore(banner, main.firstChild);
 
-  // Update ticket badge instantly
+  // Update ticket badge
   const ticketBadge = document.getElementById("ticketBadge");
   if (ticketBadge) {
     ticketBadge.textContent      = `${issueKey} · Completed`;
@@ -190,7 +201,6 @@ function showCompletedBanner() {
     ticketBadge.style.border     = "1px solid rgba(74,222,128,.2)";
   }
 
-  // Update status bar instantly
   setStatus("done", `Ticket ${issueKey} completed`);
 }
 
@@ -198,25 +208,22 @@ function showCompletedBanner() {
 // ─────────────────────────────────────────────
 // SLACK ROUTING
 // ─────────────────────────────────────────────
-async function routeToSlack(ticketId, team) {
+async function routeToSlack(ticketId) {
   try {
     const res = await apiRequest(`/tickets/${ticketId}/escalate`, "POST");
-
     if (res?.error || res?.type === "error") {
-      console.error("❌ Slack routing failed:", res);
+      console.error("Slack routing failed:", res);
+      alert("Slack routing failed ❌");
       return null;
     }
 
-    // Update escalation label on ticket card if visible
-    if (res.channel) {
-      updateEscalationLabel(ticketId, res.channel);
-      localStorage.setItem(`esc_${ticketId}`, res.channel);
-    }
+    updateEscalationLabel(ticketId, res.channel);
+    localStorage.setItem(`esc_${ticketId}`, res.channel);
 
     return res;
-
   } catch (err) {
-    console.error("❌ Slack routing error:", err);
+    console.error("Slack routing error:", err);
+    alert("Slack routing error ❌");
     return null;
   }
 }
@@ -298,7 +305,6 @@ function showCreateRunbookModal() {
       <!-- Modal Body -->
       <div style="padding:1.5rem;display:flex;flex-direction:column;gap:1rem">
 
-        <!-- Row 1: Title + Category -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
           <div>
             <label class="form-label">Title *</label>
@@ -320,7 +326,6 @@ function showCreateRunbookModal() {
           </div>
         </div>
 
-        <!-- Row 2: Severity + Keywords -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
           <div>
             <label class="form-label">Severity *</label>
@@ -338,7 +343,6 @@ function showCreateRunbookModal() {
           </div>
         </div>
 
-        <!-- Row 3: Escalation Team + Owner -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
           <div>
             <label class="form-label">Escalation Team *</label>
@@ -350,7 +354,6 @@ function showCreateRunbookModal() {
           </div>
         </div>
 
-        <!-- Row 4: Est. Resolution Time + CI Asset -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
           <div>
             <label class="form-label">Est. Resolution Time</label>
@@ -362,21 +365,18 @@ function showCreateRunbookModal() {
           </div>
         </div>
 
-        <!-- Symptoms -->
         <div>
           <label class="form-label">Symptoms</label>
           <textarea class="form-input" id="rb_symptoms" rows="3"
             placeholder="What does this incident look like? What errors appear?"></textarea>
         </div>
 
-        <!-- Resolution Steps -->
         <div>
           <label class="form-label">Resolution Steps *</label>
           <textarea class="form-input" id="rb_steps" rows="5"
             placeholder="1. Check service status&#10;2. Review logs&#10;3. Restart if required"></textarea>
         </div>
 
-        <!-- Actions -->
         <div style="display:flex;gap:.75rem;justify-content:flex-end;padding-top:.25rem">
           <button onclick="closeRunbookModal()"
             style="background:none;border:1px solid rgba(255,255,255,.1);color:#64748b;
@@ -410,19 +410,19 @@ function closeRunbookModal() {
 // SUBMIT RUNBOOK
 // ─────────────────────────────────────────────
 async function submitRunbook() {
-  const title          = document.getElementById("rb_title").value.trim();
-  const category       = document.getElementById("rb_category").value;
-  const severity       = document.getElementById("rb_severity").value;
-  const steps          = document.getElementById("rb_steps").value.trim();
-  const escalationTeam = document.getElementById("rb_escalation_team").value.trim();
+  const title = document.getElementById("rb_title").value.trim();
+  const category = document.getElementById("rb_category").value;
+  const severity = document.getElementById("rb_severity").value;
+  const steps = document.getElementById("rb_steps").value.trim();
+  const escalationTeamInput = document.getElementById("rb_escalation_team").value.trim();
 
-  if (!title || !category || !severity || !steps || !escalationTeam) {
+  if (!title || !category || !severity || !steps || !escalationTeamInput) {
     showFormMsg("error", "Please fill in Title, Category, Severity, Escalation Team, and Resolution Steps.");
     return;
   }
 
-  const btn       = document.getElementById("submitRunbookBtn");
-  btn.disabled    = true;
+  const btn = document.getElementById("submitRunbookBtn");
+  btn.disabled = true;
   btn.textContent = "Saving...";
 
   const payload = {
@@ -432,7 +432,7 @@ async function submitRunbook() {
     keywords:                  document.getElementById("rb_keywords").value.trim()         || null,
     symptoms:                  document.getElementById("rb_symptoms").value.trim()         || null,
     resolution_steps:          steps,
-    escalation_team:           escalationTeam,
+    escalation_team:           escalationTeamInput,
     owner:                     document.getElementById("rb_owner").value.trim()            || null,
     estimated_resolution_time: document.getElementById("rb_resolution_time").value.trim()  || null,
     ci_asset:                  document.getElementById("rb_ci_asset").value.trim()         || null,
@@ -443,7 +443,7 @@ async function submitRunbook() {
 
     if (res?.error || res?.type === "error") {
       showFormMsg("error", res.message || "Failed to create runbook.");
-      btn.disabled    = false;
+      btn.disabled = false;
       btn.textContent = "Save Runbook";
       return;
     }
@@ -451,7 +451,7 @@ async function submitRunbook() {
     document.getElementById("runbookModalOverlay")?.remove();
 
     const success = document.createElement("div");
-    success.className       = "section-card";
+    success.className = "section-card";
     success.style.marginTop = "1rem";
     success.innerHTML = `
       <div style="padding:2rem;text-align:center">
@@ -467,7 +467,7 @@ async function submitRunbook() {
 
   } catch (err) {
     showFormMsg("error", "Unexpected error: " + err.message);
-    btn.disabled    = false;
+    btn.disabled = false;
     btn.textContent = "Save Runbook";
   }
 }
@@ -554,7 +554,7 @@ function buildCard(icon, title, count, id, bodyHtml, delay, rightText = "") {
 function showRunbookInfo(data) {
   if (data.match_type !== "runbook_match") return;
   document.getElementById("runbookInfo").classList.add("show");
-  document.getElementById("infoTitle").textContent    = data.runbook_title    || "—";
+  document.getElementById("infoTitle").textContent = data.runbook_title || "—";
   document.getElementById("infoCategory").textContent = data.runbook_category || "—";
 }
 
@@ -564,7 +564,7 @@ function showRunbookInfo(data) {
 // ─────────────────────────────────────────────
 function showAiFallbackBanner() {
   const banner = document.createElement("div");
-  banner.id    = "aiFallbackBanner";
+  banner.id = "aiFallbackBanner";
   banner.style.cssText = `
     background: rgba(250,204,21,.04);
     border: 1px solid rgba(250,204,21,.2);
@@ -594,9 +594,9 @@ function showAiFallbackBanner() {
       </p>
     </div>`;
 
-  const statusBar    = document.querySelector(".status-bar");
+  const statusBar = document.querySelector(".status-bar");
   const progressWrap = document.querySelector(".progress-wrap");
-  const main         = document.getElementById("mainContent");
+  const main = document.getElementById("mainContent");
 
   statusBar.parentNode.insertBefore(banner, statusBar);
   statusBar.style.display = "none";
@@ -620,13 +620,16 @@ function renderRunbook(data) {
   isAiFallback = data.match_type === "ai_fallback";
 
   if (isAiFallback) {
-    escalationTeam          = data.runbook_escalation_team || data.team || null;
-    window.slackChannel     = data.team || data.slack_channel || null;
+    escalationTeam             = data.runbook_escalation_team || data.team || null;
+    window.slackChannel        = data.team || data.slack_channel || null;
     window.lastRunbookCategory = data.runbook_category ?? data.team ?? window.slackChannel ?? "L2/L3 Support Team";
   } else {
     escalationTeam             = data.runbook_escalation_team || null;
     window.lastRunbookCategory = data.runbook_category || null;
   }
+
+  const main = document.getElementById("mainContent");
+  main.innerHTML = "";
 
   if (isAiFallback) {
     showAiFallbackBanner();
@@ -636,8 +639,8 @@ function renderRunbook(data) {
 
   const checklist = data.checklist || data.checks || [];
   const commands  = data.commands  || data.steps  || [];
-  const rca       = data.rca       || data.root_cause        || null;
-  const recs      = data.recommendations || data.notes       || null;
+  const rca       = data.rca       || data.root_cause || null;
+  const recs      = data.recommendations || data.notes || null;
 
   const timeStr = new Date().toLocaleTimeString();
   let html = "";
@@ -667,12 +670,8 @@ function renderRunbook(data) {
 
   if (commands.length) {
     const cmds = commands.map((cmd, i) => {
-      const label   = typeof cmd === "string"
-        ? `Command ${i + 1}`
-        : (cmd.label || cmd.name || `Command ${i + 1}`);
-      const command = typeof cmd === "string"
-        ? cmd
-        : (cmd.command || cmd.cmd || cmd.script || "");
+      const label   = typeof cmd === "string" ? `Command ${i + 1}` : (cmd.label || cmd.name || `Command ${i + 1}`);
+      const command = typeof cmd === "string" ? cmd : (cmd.command || cmd.cmd || cmd.script || "");
       return `
         <div class="command-block">
           <div class="cmd-header">
@@ -690,27 +689,61 @@ function renderRunbook(data) {
     );
   }
 
-  if (rca) html += buildCard("🔍", "Root Cause Analysis", "", "rca",
-    `<p style="font-size:.875rem;line-height:1.7">${rca}</p>`, 0.15);
+  if (rca) {
+    html += buildCard("🔍", "Root Cause Analysis", "", "rca",
+      `<p style="font-size:.875rem;line-height:1.7">${rca}</p>`, 0.15);
+  }
 
-  if (recs) html += buildCard("💡", "Recommendations", "", "recs",
-    `<p style="font-size:.875rem;line-height:1.7">${recs}</p>`, 0.2);
+  if (recs) {
+    html += buildCard("💡", "Recommendations", "", "recs",
+      `<p style="font-size:.875rem;line-height:1.7">${recs}</p>`, 0.2);
+  }
 
   if (!html) {
     html = `
       <div class="state-box">
         <div class="icon">📭</div>
         <div>No checklist or commands returned.</div>
-        <div style="margin-top:.5rem;color:#a855f7;font-size:.75rem">
-          Check your runbook service response shape.
-        </div>
       </div>`;
   }
 
-  document.getElementById("mainContent").innerHTML = html;
+  main.innerHTML = html;
 
-  if (!isAiFallback) setStatus("done", `Runbook loaded for ${issueKey}`);
+  setStatus("done", `Runbook loaded for ${issueKey}`);
   setProgress(0);
+}
+
+
+// ─────────────────────────────────────────────
+// ESCALATION INFO BANNER
+// ─────────────────────────────────────────────
+function showEscalationBanner(category, team, isAi) {
+  const banner = document.createElement("div");
+
+  const displayCategory = category || "Unknown";
+  const displayTeam     = team     || "L2/L3 Support";
+
+  banner.style.cssText = `
+    background: rgba(59,130,246,.05);
+    border: 1px solid rgba(59,130,246,.2);
+    border-radius: 14px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: #cbd5e1;
+  `;
+  banner.innerHTML = `
+    🚀 Escalated to:
+    <span style="color:#60a5fa;font-weight:700">${displayCategory}</span>
+    (<span style="color:#a855f7">${displayTeam}</span>)
+    <span style="margin-left:8px;font-size:0.7rem;color:#64748b">
+      ${isAi ? "AI Routed" : "Runbook Match"}
+    </span>
+  `;
+
+  const main = document.getElementById("mainContent");
+  main.parentNode.insertBefore(banner, main);
 }
 
 
