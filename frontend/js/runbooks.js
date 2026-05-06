@@ -319,7 +319,6 @@ function showCreateRunbookModal() {
               <option>Deployment</option>
               <option>Network</option>
               <option>Performance</option>
-              <option>Security</option>
               <option>Storage</option>
               <option>Other</option>
             </select>
