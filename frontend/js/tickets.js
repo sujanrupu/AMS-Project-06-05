@@ -49,7 +49,6 @@ async function loadTickets() {
         <!-- CARD BODY -->
         <div class="px-4 py-3 space-y-2 text-sm">
 
-          <!-- 1. Name + Email -->
           <div class="grid grid-cols-2 gap-x-4 gap-y-2">
             <div>
               <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-0.5">Name</span>
@@ -61,19 +60,16 @@ async function loadTickets() {
             </div>
           </div>
 
-          <!-- 2. Summary -->
           <div>
             <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-0.5">Summary</span>
             <span class="text-slate-200 text-xs">${t.summary || "-"}</span>
           </div>
 
-          <!-- 3. Description -->
           <div>
             <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-0.5">Description</span>
             <span class="text-slate-300 text-xs leading-relaxed line-clamp-2">${t.description || "-"}</span>
           </div>
 
-          <!-- 4. Priority + SLA Response + SLA Resolution -->
           <div class="grid grid-cols-2 gap-x-4 gap-y-2 pt-1">
             <div>
               <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-0.5">Priority</span>
@@ -89,7 +85,6 @@ async function loadTickets() {
             </div>
           </div>
 
-          <!-- 5. Status control -->
           ${!isCompleted ? `
             <div class="flex items-center gap-2 pt-1">
               <span class="mono text-[0.6rem] text-muted uppercase tracking-widest">Update Status</span>
@@ -109,11 +104,19 @@ async function loadTickets() {
           >
             ⚙ Runbook
           </button>
+          ${!t.parent_ticket_key ? `
+          <button
+            class="flex-1 bg-red/10 hover:bg-red/20 border border-red/15 text-red-300 text-[0.65rem] font-bold py-2 px-3 rounded-xl mono transition-all duration-200 hover:scale-[1.02]"
+            onclick="openRCA('${t.issue_key}')"
+          >
+            🔍 RCA
+          </button>
+          ` : ''}
           <button
             class="flex-1 bg-surface2 hover:bg-white/5 border border-purple/15 text-slate-300 text-[0.65rem] font-bold py-2 px-3 rounded-xl mono transition-all duration-200 hover:scale-[1.02]"
             onclick="openChildTickets('${t.issue_key}')"
           >
-            👥 Child Tickets
+            👥 Child
           </button>
           <button
             class="bg-red/10 hover:bg-red/20 border border-red/20 text-red text-[0.65rem] font-bold py-2 px-3 rounded-xl mono transition-all duration-200 hover:scale-[1.02]"
@@ -130,6 +133,131 @@ async function loadTickets() {
   } catch (err) {
     console.error("❌ Load tickets failed:", err);
   }
+}
+
+
+// ───────────── RCA MODAL ─────────────
+async function openRCA(issueKey) {
+  const old = document.getElementById("rcaModal");
+  if (old) old.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "rcaModal";
+  modal.className = "fixed inset-0 bg-black/70 modal-backdrop flex items-center justify-center z-50";
+  modal.onclick = (e) => { if (e.target === modal) closeRCAModal(); };
+
+  modal.innerHTML = `
+    <div class="bg-surface border border-purple/15 rounded-2xl w-[640px] max-h-[85vh] overflow-auto relative shadow-2xl animate-slideUp">
+
+      <!-- MODAL HEADER -->
+      <div class="flex items-center justify-between px-6 py-4 bg-surface2 border-b border-purple/15 sticky top-0">
+        <div>
+          <h2 class="font-bold text-red-300">🔍 Copilot RCA</h2>
+          <p class="mono text-muted text-xs mt-0.5">Ticket: ${issueKey}</p>
+        </div>
+        <button
+          class="mono text-muted hover:text-slate-200 text-lg transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5"
+          onclick="closeRCAModal()"
+        >✕</button>
+      </div>
+
+      <!-- LOADING STATE -->
+      <div id="rcaBody" class="p-6">
+        <div class="flex flex-col items-center justify-center py-10 gap-3">
+          <svg class="animate-spin h-6 w-6 text-purple" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+          </svg>
+          <span class="mono text-muted text-xs">Analysing incident...</span>
+        </div>
+      </div>
+
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  try {
+    const res = await apiRequest(`/tickets/${issueKey}/rca`);
+
+    if (!res || res.error || res.type === "error") {
+      document.getElementById("rcaBody").innerHTML = `
+        <div class="mono text-center py-8 text-sm">
+          <div class="text-3xl mb-3">❌</div>
+          <div class="text-red-400">${res?.detail || res?.message || "Failed to load RCA"}</div>
+        </div>
+      `;
+      return;
+    }
+
+    const confColor = {
+      HIGH:   "text-green border-green/20 bg-green/5",
+      MEDIUM: "text-yellow border-yellow/20 bg-yellow/5",
+      LOW:    "text-red-300 border-red/20 bg-red/5",
+    }[res.confidence] || "text-muted border-muted/20 bg-white/5";
+
+    document.getElementById("rcaBody").innerHTML = `
+      <div class="space-y-5">
+
+        <!-- CONFIDENCE BADGE + CACHED -->
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="mono text-xs px-3 py-1 rounded-full border ${confColor} font-semibold">
+            ${res.confidence || "LOW"}
+          </span>
+          <span class="mono text-xs text-muted">${res.confidence_label || ""}</span>
+          ${res.cached
+            ? `<span class="mono text-xs px-2.5 py-0.5 rounded-full border border-purple/20 bg-purple/10 text-purple ml-auto">⚡ Cached</span>`
+            : ''
+          }
+        </div>
+
+        <!-- SUMMARY -->
+        <div class="mono text-xs text-muted italic">${res.summary || ""}</div>
+
+        <!-- ROOT CAUSE -->
+        <div class="bg-surface2 border border-purple/10 rounded-xl p-4">
+          <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-2">Root Cause</span>
+          <p class="text-sm leading-relaxed text-slate-200">${res.root_cause || "-"}</p>
+        </div>
+
+        <!-- AFFECTED COMPONENT -->
+        <div class="bg-surface2 border border-purple/10 rounded-xl p-4">
+          <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-2">Affected Component</span>
+          <p class="text-sm text-yellow font-semibold">${res.affected || "-"}</p>
+        </div>
+
+        <!-- RESOLUTION STEPS -->
+        <div class="bg-surface2 border border-purple/10 rounded-xl p-4">
+          <span class="mono text-[0.6rem] text-muted uppercase tracking-widest block mb-3">Resolution Steps</span>
+          <ol class="space-y-2">
+            ${(res.steps || []).map((step, i) => `
+              <li class="flex items-start gap-3 text-sm">
+                <span class="mono text-purple font-bold flex-shrink-0">${i + 1}.</span>
+                <span class="text-slate-200 leading-relaxed">${step}</span>
+              </li>
+            `).join("")}
+          </ol>
+        </div>
+
+      </div>
+    `;
+
+  } catch (err) {
+    console.error("❌ RCA fetch error:", err);
+    document.getElementById("rcaBody").innerHTML = `
+      <div class="mono text-center py-8 text-sm">
+        <div class="text-3xl mb-3">❌</div>
+        <div class="text-red-400">Unexpected error occurred</div>
+      </div>
+    `;
+  }
+}
+
+
+// ───────────── CLOSE RCA MODAL ─────────────
+function closeRCAModal() {
+  const modal = document.getElementById("rcaModal");
+  if (modal) modal.remove();
 }
 
 
@@ -187,7 +315,6 @@ async function openChildTickets(parentKey) {
     modal.innerHTML = `
       <div class="bg-surface border border-purple/15 rounded-2xl w-[620px] max-h-[80vh] overflow-auto relative shadow-2xl animate-slideUp">
 
-        <!-- MODAL HEADER -->
         <div class="flex items-center justify-between px-6 py-4 bg-surface2 border-b border-purple/15 sticky top-0">
           <div>
             <h2 class="font-bold text-purple">Child Tickets</h2>
@@ -199,7 +326,6 @@ async function openChildTickets(parentKey) {
           >✕</button>
         </div>
 
-        <!-- MODAL BODY -->
         <div class="p-6 space-y-4">
           ${
             children.length === 0
@@ -253,7 +379,7 @@ async function openChildTickets(parentKey) {
 }
 
 
-// ───────────── CLOSE MODAL ─────────────
+// ───────────── CLOSE CHILD MODAL ─────────────
 function closeChildModal() {
   const modal = document.getElementById("childModal");
   if (modal) modal.remove();

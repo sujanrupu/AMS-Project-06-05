@@ -192,3 +192,69 @@ async def update_ticket_runbook(
     except Exception as e:
         print(f"❌ update_ticket_runbook error: {e}")
         return False
+    
+# ─────────────────────────────────────────────
+# UPDATE TICKET RCA
+# ─────────────────────────────────────────────
+async def update_ticket_rca(
+    issue_key:          str,
+    root_cause:         str,
+    affected_component: str = None,
+    resolution_steps:   list = None,
+    confidence:         str = None,
+) -> bool:
+    try:
+        res = (
+            supabase.table("tickets")
+            .update({
+                "rca_root_cause":   root_cause,
+                "rca_affected":     affected_component,
+                "rca_steps":        resolution_steps or [],
+                "rca_confidence":   confidence,
+            })
+            .eq("issue_key", issue_key)
+            .execute()
+        )
+        return bool(res.data)
+
+    except Exception as e:
+        print(f"❌ update_ticket_rca error: {e}")
+        return False
+    
+# ─────────────────────────────────────────────
+# VECTOR SEARCH ON COMPLETED PARENT TICKETS WITH RCA
+# ─────────────────────────────────────────────
+async def search_completed_tickets_with_rca(query_embedding: list, top_k: int = 3) -> list:
+    try:
+        res = supabase.rpc(
+            "match_tickets",
+            {
+                "query_embedding": query_embedding,
+                "match_count":     top_k,
+            }
+        ).execute()
+
+        if not res.data:
+            return []
+
+        issue_keys = [t.get("issue_key") for t in res.data if t.get("issue_key")]
+
+        if not issue_keys:
+            return []
+
+        full = (
+            supabase.table("tickets")
+            .select("issue_key, summary, description, rca_root_cause, rca_affected, rca_steps, rca_confidence")
+            .in_("issue_key", issue_keys)
+            .eq("status", "Completed")
+            .is_("parent_ticket_key", "null")
+            .not_.is_("rca_root_cause", "null")
+            .execute()
+        )
+
+        print(f"[RPC] match_tickets_rca filtered results: {full.data}")
+        return full.data or []
+
+    except Exception as e:
+        print(f"❌ search_completed_tickets_with_rca error: {e}")
+        return []

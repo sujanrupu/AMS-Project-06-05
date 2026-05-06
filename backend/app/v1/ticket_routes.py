@@ -3,6 +3,9 @@ from fastapi import APIRouter, HTTPException
 # schemas + orchestrator
 from schemas.ticket_schema import TicketRequest
 from orchestrator.ams_orchestrator import handle_ticket
+from modules.copilot_rca.handler import handle_rca_flow
+from repositories.ticket_repository import search_similar_tickets
+from services.embedding_service import get_embedding
 
 # repository layer
 from repositories.ticket_repository import (
@@ -100,3 +103,4 @@ async def complete_ticket(issueKey: str):
     except Exception as e:
         print(f"❌ complete_ticket error: {e}")
         return {"type": "error", "message": str(e)}
+    

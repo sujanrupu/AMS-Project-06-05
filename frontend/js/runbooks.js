@@ -13,7 +13,7 @@ document.getElementById("ticketBadge").textContent = issueKey;
 
 let checkedItems    = new Set();
 let isAiFallback    = false;
-let escalationTeam  = null; // ✅ store escalation team from matched runbook
+let escalationTeam  = null;
 
 
 // ─────────────────────────────────────────────
@@ -83,10 +83,29 @@ function showResolutionPrompt() {
   document.getElementById("mainContent").appendChild(prompt);
 }
 
-function onResolved(success) {
+
+// ─────────────────────────────────────────────
+// ON RESOLVED
+// ─────────────────────────────────────────────
+async function onResolved(success) {
   document.getElementById("resolutionPrompt")?.remove();
 
   if (success) {
+
+    // ── Auto-complete the ticket ──
+    try {
+      const res = await apiRequest(`/tickets/${issueKey}/complete`, "PUT");
+      if (res?.error) {
+        console.error("❌ Auto-complete failed:", res.message);
+      } else {
+        console.log(`✅ Ticket ${issueKey} auto-completed`);
+        showCompletedBanner();
+      }
+    } catch (err) {
+      console.error("❌ Auto-complete error:", err);
+    }
+
+    // ── AI fallback → open create runbook modal ──
     if (isAiFallback) {
       showCreateRunbookModal();
     } else {
@@ -100,12 +119,14 @@ function onResolved(success) {
             Issue Resolved
           </p>
           <p style="font-size:.8rem;color:#64748b;line-height:1.6">
-            Great work! The ticket can now be marked as completed.
+            Great work! The ticket has been marked as completed.
           </p>
         </div>`;
       document.getElementById("mainContent").appendChild(msg);
     }
+
   } else {
+
     const teamLine = (!isAiFallback && escalationTeam)
       ? `Escalate to: <strong style="color:#e2e8f0">${escalationTeam}</strong>`
       : `Contact <strong style="color:#e2e8f0">L2/L3 Support</strong> for further investigation.`;
@@ -124,6 +145,48 @@ function onResolved(success) {
       </div>`;
     document.getElementById("mainContent").appendChild(msg);
   }
+}
+
+
+// ─────────────────────────────────────────────
+// COMPLETED BANNER
+// ─────────────────────────────────────────────
+function showCompletedBanner() {
+  if (document.getElementById("completedBanner")) return;
+
+  const banner = document.createElement("div");
+  banner.id = "completedBanner";
+  banner.style.cssText = `
+    background: rgba(74,222,128,.06);
+    border: 1px solid rgba(74,222,128,.25);
+    border-radius: 12px;
+    padding: .75rem 1.25rem;
+    margin-bottom: 1rem;
+    display: flex; align-items: center; gap: .75rem;
+    animation: slideUp .3s ease both;
+  `;
+  banner.innerHTML = `
+    <span style="font-size:1.1rem">✅</span>
+    <span style="font-family:'Syne',sans-serif;font-size:.85rem;
+                 font-weight:700;color:#4ade80">
+      Ticket ${issueKey} marked as Completed
+    </span>`;
+
+  // Insert at top of mainContent so it's always visible
+  const main = document.getElementById("mainContent");
+  main.insertBefore(banner, main.firstChild);
+
+  // ── Update ticket badge in header instantly ──
+  const ticketBadge = document.getElementById("ticketBadge");
+  if (ticketBadge) {
+    ticketBadge.textContent      = `${issueKey} · Completed`;
+    ticketBadge.style.color      = "#4ade80";
+    ticketBadge.style.background = "rgba(74,222,128,.15)";
+    ticketBadge.style.border     = "1px solid rgba(74,222,128,.2)";
+  }
+
+  // ── Update status bar instantly ──
+  setStatus("done", `Ticket ${issueKey} completed`);
 }
 
 
@@ -186,7 +249,6 @@ function showCreateRunbookModal() {
       <!-- Modal Body -->
       <div style="padding:1.5rem;display:flex;flex-direction:column;gap:1rem">
 
-        <!-- Row 1: Title + Category -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
           <div>
             <label class="form-label">Title *</label>
@@ -208,7 +270,6 @@ function showCreateRunbookModal() {
           </div>
         </div>
 
-        <!-- Row 2: Severity + Keywords -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
           <div>
             <label class="form-label">Severity *</label>
@@ -226,7 +287,6 @@ function showCreateRunbookModal() {
           </div>
         </div>
 
-        <!-- Row 3: Escalation Team + Owner -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
           <div>
             <label class="form-label">Escalation Team *</label>
@@ -238,7 +298,6 @@ function showCreateRunbookModal() {
           </div>
         </div>
 
-        <!-- Row 4: Est. Resolution Time + CI Asset -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
           <div>
             <label class="form-label">Est. Resolution Time</label>
@@ -250,21 +309,18 @@ function showCreateRunbookModal() {
           </div>
         </div>
 
-        <!-- Symptoms -->
         <div>
           <label class="form-label">Symptoms</label>
           <textarea class="form-input" id="rb_symptoms" rows="3"
             placeholder="What does this incident look like? What errors appear?"></textarea>
         </div>
 
-        <!-- Resolution Steps -->
         <div>
           <label class="form-label">Resolution Steps *</label>
           <textarea class="form-input" id="rb_steps" rows="5"
             placeholder="1. Check service status&#10;2. Review logs&#10;3. Restart if required"></textarea>
         </div>
 
-        <!-- Actions -->
         <div style="display:flex;gap:.75rem;justify-content:flex-end;padding-top:.25rem">
           <button onclick="closeRunbookModal()"
             style="background:none;border:1px solid rgba(255,255,255,.1);color:#64748b;
@@ -317,13 +373,13 @@ async function submitRunbook() {
     title,
     category,
     severity,
-    keywords:                 document.getElementById("rb_keywords").value.trim()       || null,
-    symptoms:                 document.getElementById("rb_symptoms").value.trim()       || null,
-    resolution_steps:         steps,
-    escalation_team:          escalationTeam,
-    owner:                    document.getElementById("rb_owner").value.trim()          || null,
-    estimated_resolution_time:document.getElementById("rb_resolution_time").value.trim()|| null,
-    ci_asset:                 document.getElementById("rb_ci_asset").value.trim()       || null,
+    keywords:                  document.getElementById("rb_keywords").value.trim()         || null,
+    symptoms:                  document.getElementById("rb_symptoms").value.trim()         || null,
+    resolution_steps:          steps,
+    escalation_team:           escalationTeam,
+    owner:                     document.getElementById("rb_owner").value.trim()            || null,
+    estimated_resolution_time: document.getElementById("rb_resolution_time").value.trim()  || null,
+    ci_asset:                  document.getElementById("rb_ci_asset").value.trim()         || null,
   };
 
   try {
@@ -499,7 +555,7 @@ function renderRunbook(data) {
   document.getElementById("skeletonLoader")?.remove();
 
   isAiFallback   = data.match_type === "ai_fallback";
-  escalationTeam = data.runbook_escalation_team || null; // ✅ store for escalation message
+  escalationTeam = data.runbook_escalation_team || null;
 
   if (isAiFallback) {
     showAiFallbackBanner();
