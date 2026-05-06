@@ -3,7 +3,7 @@ Ticket Table creation schema:
 -- Enable pgvector
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- Create tickets table
+-- Create tickets table with all fields
 CREATE TABLE IF NOT EXISTS tickets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS tickets (
   is_duplicate BOOLEAN DEFAULT FALSE,
   parent_ticket_key TEXT,
 
-  -- sentence-transformers embedding
+  -- embeddings
   embedding VECTOR(384),
 
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -41,7 +41,18 @@ CREATE TABLE IF NOT EXISTS tickets (
   runbook_title TEXT,
   runbook_category TEXT,
   runbook_escalation_team TEXT,
-  match_type TEXT
+  match_type TEXT,
+
+  -- RCA fields
+  rca_root_cause TEXT,
+  rca_affected TEXT,
+  rca_steps JSONB DEFAULT '[]',
+  rca_confidence TEXT,
+
+  -- RCA source tracking
+  rca_source TEXT,
+  rca_matched_from TEXT,
+  rca_matched_summary TEXT
 );
 
 
